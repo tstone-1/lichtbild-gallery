@@ -109,6 +109,14 @@ jobs:
         # a gate that refuses two identical captures is as useless as one that refuses nothing.
         run: bash tests/deploy-compare-test.sh
 
+      - name: Check the deploy script's release-channel comparison
+        # The fourth tooling test, and it guards a hazard that did not exist before the plugin
+        # was published: the live site's plugin folder is the wordpress.org slug, so WordPress
+        # can now update it from SVN, with none of this script's digest verification. The state
+        # nothing else reports is the same version number carrying different bytes. Offline --
+        # `channels --against <zip>` takes a local archive, so no credentials and no network.
+        run: bash tests/deploy-channels-test.sh
+
   mutations:
     name: mutations (PHP 8.2)
     runs-on: ubuntu-latest

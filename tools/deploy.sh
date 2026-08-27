@@ -50,6 +50,12 @@ HOST="${LICHTBILD_DEPLOY_HOST:-}"
 USER_NAME="${LICHTBILD_DEPLOY_USER:-}"
 REMOTE_DIR="${LICHTBILD_DEPLOY_DIR:-/wp-content/plugins/lichtbild-gallery}"
 
+# The wordpress.org slug, which is also the plugin FOLDER name on the server -- and they are the
+# same string for a reason that matters: WordPress matches an installed plugin to the directory by
+# folder name, so this one value is what subscribes the live site to directory updates. It is not
+# a deployment secret; the listing is public.
+SLUG="lichtbild-gallery"
+
 # Two subcommands never open a connection, and neither may require a deployment target -- that
 # is not a convenience, it is what lets tests/deploy-order-test.sh and tests/deploy-audit-test.sh
 # run in CI, on a runner with no credentials and no route to the host. A check nothing exercises
@@ -63,6 +69,7 @@ NEEDS_TARGET=1
 case "${1:-}" in
 	order-check) NEEDS_TARGET=0 ;;
 	audit) [ "${2:-}" = "--against" ] && NEEDS_TARGET=0 ;;
+	channels) NEEDS_TARGET=0 ;;
 esac
 
 if [ "$NEEDS_TARGET" -eq 1 ] && { [ -z "$HOST" ] || [ -z "$USER_NAME" ]; }; then
@@ -563,6 +570,17 @@ shipped_files() {
 	done
 }
 
+# Is $1 deployed on purpose but deliberately absent from the wordpress.org build?
+in_server_extra() {
+	local rel
+
+	for rel in "${SERVER_EXTRA[@]}"; do
+		[ "$rel" = "$1" ] && return 0
+	done
+
+	return 1
+}
+
 # Is $1 one of the files deliberately never deployed?
 expected_absent() {
 	local rel
@@ -940,8 +958,183 @@ cmd_plan() {
 	[ "$ok" -eq 1 ] || return 1
 }
 
+# ---------------------------------------------------------------------------------------------
+# channels [--against <zip>] -- do the two release channels agree?
+#
+# Until 2026-08-27 this site had exactly one way to receive the plugin: the FTPS deploy below,
+# which verifies every file by digest because the transport drops transfers and once left a
+# 0-byte class file on a public site. Publishing to wordpress.org added a second: WordPress
+# matches an installed plugin to the directory by FOLDER SLUG, and this install's folder is
+# `lichtbild-gallery`, so the site now checks api.wordpress.org and can be updated from SVN --
+# with no digest verification, no `capture`, and no `compare`.
+#
+# Three states, and only the third is silent:
+#
+#   site ahead              no update is offered, but the site runs code the directory cannot
+#                           reproduce, and the next published version must clear that number
+#   directory ahead         an update is offered, possibly applied automatically, and the site
+#                           changes without a single check this script performs
+#   same version, different bytes
+#                           invisible. A file deployed without a version bump is flattened by
+#                           the next update, and nothing anywhere reports it
+#
+# The third is the same blindness `audit` already exists for one layer up: comparing versions is
+# comparing a label, exactly as comparing byte counts was, and this repository has already paid
+# for believing a label once.
+#
+# Needs no deployment target -- it compares the LOCAL shipped tree against the published zip, so
+# it runs in CI and on a fresh clone. `--against <zip>` substitutes a local archive for the
+# download, which is how tests/deploy-channels-test.sh proves each verdict offline.
+cmd_channels() {
+	local against="" version zip tmp published rel want got
+	local only_here=0 only_there=0 differing=0 by_design=0
+
+	[ "${1:-}" = "--against" ] && { against="${2:?usage: channels --against <zip>}"; }
+
+	version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" "$ROOT/lichtbild-gallery.php" | head -1)"
+
+	if [ -z "$version" ]; then
+		echo "[ERROR] could not read LICHTBILD_VERSION, so there is no version to compare" >&2
+		return 2
+	fi
+
+	echo "local version: $version"
+
+	tmp="$(mktemp -d)"
+	# shellcheck disable=SC2064
+	trap "rm -rf '$tmp'" RETURN
+
+	if [ -n "$against" ]; then
+		[ -f "$against" ] || { echo "[ERROR] no such archive: $against" >&2; return 2; }
+		zip="$against"
+		echo "comparing against: $against"
+	else
+		zip="$tmp/published.zip"
+		local url="https://downloads.wordpress.org/plugin/${SLUG}.${version}.zip"
+
+		if ! curl -fsSL -o "$zip" "$url"; then
+			echo
+			echo "[WARN] the directory does not serve ${SLUG} ${version}."
+			echo "       The site would be AHEAD of wordpress.org: no update is offered, so"
+			echo "       nothing breaks today, but this version exists only on the server and"
+			echo "       the next published release must be at least $version."
+			return 1
+		fi
+
+		echo "comparing against: $url"
+	fi
+
+	# A truncated download is not a mismatch, and on 2026-08-27 one was read as forty-one of
+	# them: the directory was still generating the archive, the extraction produced nothing, and
+	# an empty operand renders as a total difference. Establish the bytes are an archive before
+	# reading any comparison against them.
+	if ! unzip -tq "$zip" >/dev/null 2>&1; then
+		echo "[ERROR] the published archive is not a readable zip ($(wc -c < "$zip" | tr -d ' ') bytes)." >&2
+		echo "        That is an incomplete download, NOT a difference; retry before concluding" >&2
+		echo "        anything about the two channels." >&2
+		return 2
+	fi
+
+	published="$tmp/published"
+	mkdir -p "$published"
+	unzip -q "$zip" -d "$published"
+
+	[ -d "$published/$SLUG" ] || {
+		echo "[ERROR] the published archive has no $SLUG/ directory at its root" >&2
+		return 2
+	}
+
+	echo
+
+	local -a shipped
+	while IFS= read -r rel; do
+		[ -n "$rel" ] && shipped+=( "$rel" )
+	done < <(shipped_files) || return 1
+
+	[ "${#shipped[@]}" -gt 0 ] || {
+		echo "[ERROR] the shipped set is empty, so this compared nothing" >&2
+		return 2
+	}
+
+	for rel in "${shipped[@]}"; do
+		if expected_absent "$rel"; then
+			continue
+		fi
+
+		if [ ! -f "$published/$SLUG/$rel" ]; then
+			# A SERVER_EXTRA file is deployed on purpose and excluded from the directory
+			# build on purpose -- the German catalogue, because a hosted plugin gets its
+			# translations from translate.wordpress.org. Absent there is CORRECT, and
+			# reporting it as a difference every run is how a finding stops being read.
+			# It is still a hazard, counted and named below rather than waved through.
+			if in_server_extra "$rel"; then
+				printf '  [BY DESIGN]  %s (deployed, deliberately not published)\n' "$rel"
+				by_design=$((by_design + 1))
+			else
+				printf '  [ONLY HERE]  %s\n' "$rel"
+				only_here=$((only_here + 1))
+			fi
+			continue
+		fi
+
+		want="$(shasum -a 256 "$ROOT/$rel" | cut -d' ' -f1)"
+		got="$(shasum -a 256 "$published/$SLUG/$rel" | cut -d' ' -f1)"
+
+		if [ "$want" != "$got" ]; then
+			printf '  [DIFFERS]    %s\n' "$rel"
+			differing=$((differing + 1))
+		fi
+	done
+
+	# The other direction. A file the directory ships and the deploy does not is how an update
+	# adds something to the site that no deploy would ever have put there.
+	while IFS= read -r rel; do
+		rel="${rel#./}"
+		[ -f "$ROOT/$rel" ] || {
+			printf '  [ONLY THERE] %s\n' "$rel"
+			only_there=$((only_there + 1))
+		}
+	done < <(cd "$published/$SLUG" && find . -type f | sort)
+
+	echo
+	printf 'compared %d shipped file(s): %d differing, %d only here, %d only in the directory, %d by design\n' \
+		"${#shipped[@]}" "$differing" "$only_here" "$only_there" "$by_design"
+
+	if [ "$differing" -eq 0 ] && [ "$only_here" -eq 0 ] && [ "$only_there" -eq 0 ]; then
+		echo
+		echo "[OK] the two channels carry identical bytes at $version for every file both ship."
+
+		if [ "$by_design" -gt 0 ]; then
+			echo
+			echo "[HAZARD] $by_design file(s) are deployed but deliberately absent from the"
+			echo "         directory build, so a wordpress.org update REMOVES them from the"
+			echo "         server. The German catalogue is one of them and the site is lang=de,"
+			echo "         so an update silently reverts 28 visitor-facing strings to English."
+			echo "         This is the concrete reason to keep plugin auto-updates OFF for this"
+			echo "         install and to apply releases through \`push\` instead."
+		fi
+
+		return 0
+	fi
+
+	echo
+	echo "[ACTION REQUIRED] the two channels disagree at the SAME version number, which is the"
+	echo "                  state nothing else reports. A wordpress.org update will overwrite"
+	echo "                  the server's copy with the directory's. Publish this tree to SVN, or"
+	echo "                  bump the version, before deploying again."
+	return 1
+}
+
 cmd_push() {
 	cmd_plan || return 1
+
+	# A pre-flight, not a gate. Knowing before the upload is strictly more useful than after,
+	# but an emergency fix to a live site must not be blocked on a wordpress.org release, so
+	# this reports and continues. `channels` exits non-zero for a caller that wants a gate.
+	echo
+	echo "release channels, before touching the server:"
+	cmd_channels || true
+
 	echo
 	echo "uploading in ${CHUNK}-byte chunks:"
 
@@ -1145,6 +1338,11 @@ case "${1:-}" in
 		cmd_audit "$@"
 		;;
 	plan) cmd_plan ;;
+	# channels [--against <zip>] -- see the block above cmd_channels. Offline with --against.
+	channels)
+		shift
+		cmd_channels "$@"
+		;;
 	push) cmd_push ;;
 	capture) cmd_capture "${2:?usage: capture <out> [urls]}" "${3:-}" ;;
 	fingerprint) cmd_fingerprint "${2:?usage: fingerprint <out> [urls]}" "${3:-}" ;;

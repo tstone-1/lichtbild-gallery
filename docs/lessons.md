@@ -1908,3 +1908,81 @@ still not ignored, because a glob that swallows the deploy script is the other k
 already written down for values rather than filenames: after any operation that copies a
 credentials-adjacent file, run `git status --porcelain` and read it, rather than trusting that the
 rule which covered the original covers its copy.
+
+## Publishing gave the live site a second update channel, and the two disagree by design
+
+2026-08-27, an hour after the first SVN commit. WordPress matches an installed plugin to the
+directory **by folder slug**, and this site's plugin folder is `lichtbild-gallery` — the slug that
+had just been registered. So a site that had exactly one way to receive this plugin, the FTPS
+deploy that digest-verifies every file and captures 116 URLs either side, silently acquired a
+second: `api.wordpress.org`, arriving as an ordinary update, with none of that.
+
+Both channels were on `26.8.25`, so nothing was offered and nothing was at risk that day. The
+hazard is latent, and it has three shapes:
+
+| state | what happens |
+|---|---|
+| site ahead | no update offered — but the site runs code the directory cannot reproduce |
+| directory ahead | an update is offered, possibly applied automatically, and the site changes without one check this deploy performs |
+| **same version, different bytes** | invisible. A file deployed without a version bump is flattened by the next update |
+
+The third is the same blindness `audit` already exists for, one layer up: **comparing version
+numbers is comparing a label**, exactly as comparing byte counts was before the digest check
+replaced it, and this repository has already paid once for believing a label.
+
+`tools/deploy.sh channels` compares the local shipped tree against the archive the directory
+actually serves for the same version, and `push` runs it before touching the server. It needs no
+deployment target — it never opens an FTP connection — so `tests/deploy-channels-test.sh` proves
+all nine of its verdicts in CI with no credentials and no network, via `--against <zip>`.
+
+**Its first run found something no one had thought about, and it is the useful half of this
+entry.** `languages/lichtbild-gallery-de_DE.mo` is deployed to the site and deliberately excluded
+from the wordpress.org build, because a hosted plugin gets its translations from
+translate.wordpress.org. Correct in both places, and it means **a wordpress.org update deletes the
+German catalogue from a site whose pages are `lang="de"`** — the 28 visitor-facing strings that
+26.8.13 exists to have translated, silently back to English, with the plugin still reporting the
+same version. That is the concrete argument for keeping plugin auto-updates off for this install,
+and it was invisible until something compared the two channels file by file.
+
+A `SERVER_EXTRA` file absent from the directory build is therefore reported `[BY DESIGN]` and not
+as a difference — a finding that fires every run stops being read, which `shipped_files()` already
+says about `SERVER_EXTRA` names that no longer exist — but it is still counted and named as a
+`[HAZARD]`, because "expected" and "harmless" are not the same word.
+
+One check in it is there because of a mistake made ninety minutes earlier. A comparison against
+the directory's still-generating zip reported all 41 files as differences: the download was
+truncated, the extraction produced nothing, and **an empty operand renders as a total mismatch**.
+`channels` therefore refuses an archive `unzip -t` cannot read, exits 2, and prints no difference
+lines at all — asserted directly, because "every file changed" is the most alarming thing this
+tool can say and it must not be able to say it for that reason.
+
+**Closing this properly is a language pack, not a toggle**, and both halves are worth writing
+down. The toggle first: the live site manages updates through **Companion Auto Update**, which
+*replaces* WordPress's native per-plugin auto-update column — so `plugins.php` showing no
+auto-update control is **not** evidence that updates are off, which is exactly how it read on
+2026-08-27. The setting lives in that plugin's own screen, and Lichtbild is excluded there now.
+
+The permanent fix removes the disagreement instead of managing it: submit the German catalogue to
+translate.wordpress.org, and the directory delivers it as a language pack, after which the `.mo`
+need not be deployed at all and the two channels ship identical bytes. The catalogue was already
+ready — 206 entries, 100%, matching the `.pot` in both directions, `msgfmt --check` clean — and
+`de/default` is the right project because the translation is **informal**; a grep for formal
+address finds only *"Sie ist leer"*, which is the gallery, not the reader. Importing a `.po`
+needs Project Translation Editor rights, which the plugin author requests on
+`make.wordpress.org/polyglots`. Three formatting details are load-bearing and none is guessable:
+the locale tag is the **WP Locale** from the teams page (`#de_DE`, not `#de`) in plain text, the
+line must begin with a lowercase `o` and a space so it renders as the reviewers' checkbox, and
+the plugin URL takes a leading minus so it does not expand into a preview. Variants like
+`de_DE_formal` are granted with the main locale and must not be requested separately.
+
+**A submitted post is not a published post, and an unpublished one notifies nobody.**
+make.wordpress.org gives a first-time contributor the Contributor role, so Publish becomes Pending
+Review and the `#de_DE` tag — the entire notification mechanism — never fires. It looks identical
+to a request quietly waiting in a queue. Verify by fetching `?p=<id>` logged out: a published post
+answers **301** to its permalink, an unpublished one **404**, and the control is any other post id
+from the same page. Two more instruments agree cheaply and share no failure mode with that one:
+the RSS feed lists published posts, and the front page carries a dozen other PTE requests. Do not
+read the first 404 as the answer on its own — the site is a JavaScript app, so a `--dump-dom`
+scrape of the post reported "plugin URL present: False" purely because it had matched the
+template rather than the content, which is a false negative that would have sent us editing a
+post that was fine.

@@ -613,6 +613,13 @@ on exit, so it never reaches an argument list, a log line, or a transcript.
   local copy.** Size is a cheap first gate; the digest is the only thing that establishes what
   is on the server.
 
+- *Publishing gave the live site a second update channel, and the two disagree by design* — the
+  site's plugin folder is the wordpress.org slug, so WordPress can now update it from SVN with
+  none of this script's verification, and the state nothing else reports is one version number
+  carrying two sets of bytes. `deploy.sh channels` compares them and `push` runs it first; its
+  first run found that an update would **delete the German catalogue** from a `lang="de"` site,
+  because the `.mo` is deployed and deliberately unpublished.
+
 **The deploy records are one per release that reached the site, and their index moved with
 them.** Eighteen releases with thirty-two hooks is a corpus, not an index line, and it was a
 seventh of this file. The list now opens
