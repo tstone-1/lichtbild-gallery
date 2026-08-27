@@ -823,10 +823,10 @@ which is a different archive of identical files. Two things to know for the next
 `--password-from-stdin` from `pbpaste`, never as `--password`, which puts it in the argument
 list. SVN here is a release system rather than a history — commit ready versions only.
 
-> The first content comparison ran while the directory was still generating that zip, and
-> reported all 41 files as one-sided differences. That is a partial download, not a mismatch.
-> A comparison against a remote artifact needs the artifact to exist first — check that the
-> bytes are a valid archive before reading the diff as a finding.
+> That comparison ran once against a zip the directory was still generating and reported all 41
+> files as differences on a healthy publish — a truncated download, not a mismatch. The mechanism
+> is not specific to this repo, so it lives in the shared corpus rather than here: see the entry
+> on an empty side of a comparison, under *Shipping and deploying* in `agent-memory`.
 
 **The gap no checklist covers: nobody has ever installed this plugin from scratch and made a
 gallery.** The fresh-install path was written in 26.8.18 and is covered by the suite and by a
