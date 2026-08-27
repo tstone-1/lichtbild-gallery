@@ -6,7 +6,8 @@ version of.
 
 **Public and GPL-2.0-or-later**, with `LICENSE`, `README.md` and a wordpress.org-format
 `readme.txt`. `github.com/tstone-1/lichtbild-gallery` has been public since 2026-08-09 and the
-plugin was submitted to wordpress.org the same day; it is in review, not approved — the dated
+plugin was submitted to wordpress.org the same day; it was **approved on 2026-08-27** and is not
+yet listed, because the directory page exists only once the code is committed to SVN — the dated
 history is under *Submitting to wordpress.org* below.
 
 > Until 2026-08-22 this paragraph said the repository was **still private and nothing had been
@@ -676,7 +677,16 @@ every uploaded file has to be verified by digest rather than by exit code or siz
 **If `deploy.sh` refuses with `set LICHTBILD_DEPLOY_HOST and LICHTBILD_DEPLOY_USER`, that is this
 change working, not a broken script.** Recreate `tools/deploy.env` with those two lines.
 
-## Submitting to wordpress.org — submitted 2026-08-09, pended 2026-08-14, **round 3 on 2026-08-22 renamed the plugin**
+## Submitting to wordpress.org — submitted 2026-08-09, three review rounds, **approved 2026-08-27**
+
+**Approved on 2026-08-27** (`APPROVED lichtbild-gallery/tstone1/27Aug26/T1`), on the 26.8.25
+archive, eighteen days after submission. **Approval creates the SVN repository and publishes
+nothing** — measured the same day: `plugins.svn.wordpress.org/lichtbild-gallery/` answers 200
+with an empty `trunk/`, `tags/` and `assets/` (a bogus slug there 404s, so the endpoint
+discriminates), while `wordpress.org/plugins/lichtbild-gallery/` still 301s to the search URL
+and `api.wordpress.org/plugins/info/1.2/` still 404s for the slug. Those last two are the
+*pre-publication* shape and are not a fault; they change when the first commit lands, and until
+then nobody can install this plugin.
 
 **26.8.21 was uploaded and the directory assigned the slug `atelier`.** That slug was
 surrendered on 2026-08-22 — see *Round 3 rejected the name, and nothing else* below — and a
@@ -759,9 +769,13 @@ kind of thing that gets assumed.
   returns three published plugins leading with that word — `atelier-product-sorting-for-woocommerce`,
   `atelier-scroll-top` and `atelier-create-cv`. Run the query rather than reasoning about the name:
   `api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[search]=<term>`.
-- **The four screenshots exist, in `.wordpress-org/`, and are not in the zip.** They go into an
-  `assets/` directory at the root of the SVN checkout once there is one, as `screenshot-1` and so
-  on, matching the order `readme.txt` describes. That directory is the SVN root's, **not the
+- **The listing artwork lives in `.wordpress-org/` and is not in the zip.** Four screenshots in
+  the order `readme.txt` describes, plus an icon and banner built by `tools/build-brand.py` —
+  the mark is a justified grid laid out by the plugin's own rule, so editing an aspect ratio
+  re-solves the geometry rather than needing a bitmap redrawn. It asserts each PNG's exact
+  pixel size and that the banner's wordmark still matches `Plugin Name:`, which is the one
+  string no other test reads and this plugin has been renamed twice. All of it goes into the
+  `assets/` directory at the root of the SVN checkout — that is the SVN root's, **not the
   plugin's own `assets/`**, and confusing the two ships two megabytes of listing images to every
   installation.
 - **`Plugin URI` resolves.** `github.com/tstone-1/lichtbild-gallery` was made public on 2026-08-09, from a
@@ -798,9 +812,21 @@ sentence that follows is nominative use and permitted. **Guideline 4** wants doc
 source: the unminified PhotoSwipe sources ship beside the minified ones, and a `readme.txt` FAQ
 entry now says so rather than leaving it to be noticed.
 
-Process, once the account exists: zip exactly what `deploy.sh` ships, upload at
-`wordpress.org/plugins/developers/add/`, review within **14 business days**, then an SVN repo
-where the code goes in `trunk/`, is copied to `tags/<version>/`, and `Stable tag` names the tag.
+**Published 2026-08-27 as r3669173**, from a checkout at `~/Developer/_svn/lichtbild-gallery`:
+`tools/build-zip.sh`'s tree into `trunk/`, copied to `tags/26.8.25/`, screenshots into the
+checkout's own `assets/`. Verified by exporting the committed paths back and digest-comparing
+them to the reviewed zip — **including the zip the directory rebuilds and actually serves**,
+which is a different archive of identical files. Two things to know for the next release:
+`svn` is `brew install svn` (macOS has not shipped it since 10.15), and the SVN password is
+**separate** from the wordpress.org login, set at
+`profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`. It goes in over
+`--password-from-stdin` from `pbpaste`, never as `--password`, which puts it in the argument
+list. SVN here is a release system rather than a history — commit ready versions only.
+
+> The first content comparison ran while the directory was still generating that zip, and
+> reported all 41 files as one-sided differences. That is a partial download, not a mismatch.
+> A comparison against a remote artifact needs the artifact to exist first — check that the
+> bytes are a valid archive before reading the diff as a finding.
 
 **The gap no checklist covers: nobody has ever installed this plugin from scratch and made a
 gallery.** The fresh-install path was written in 26.8.18 and is covered by the suite and by a
