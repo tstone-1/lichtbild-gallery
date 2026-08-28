@@ -11,6 +11,14 @@
 #     bash tools/devenv.sh status    # what is running, and what state the data is in
 #     bash tools/devenv.sh wp <...>  # run wp-cli against it
 #
+#     bash tools/devenv.sh fresh          # a SECOND, empty site with the plugin installed
+#                                         # from wordpress.org -- see cmd_fresh
+#     bash tools/devenv.sh fresh test     # the stranger's path, end to end
+#     bash tools/devenv.sh fresh --from <zip>   # ... using a locally built archive instead,
+#                                               # which is how a fix to that path is tested
+#                                               # BEFORE it is published
+#     bash tools/devenv.sh fresh <cmd>    # start | stop | status | wp, against that site
+#
 # WHY THIS EXISTS, given there is already a 90-check suite that needs none of it: the stubs
 # model WordPress, and five things are structurally beyond them — real `$wpdb` against the
 # production engine, real rewrite-rule generation, real object and term caches, the real
@@ -35,19 +43,36 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_DIR="${LICHTBILD_DEVENV:-$HOME/Developer/wp-lichtbild}"
+
+# Two environments, one script. `fresh` is a separate site on separate ports with its own data
+# directory, so it can run beside the migration environment without either touching the other --
+# and it must be separate, because the two model opposite sites: one continues an Envira
+# installation, the other has never heard of Envira and installs the plugin from wordpress.org.
+FRESH=0
+if [ "${1:-}" = "fresh" ]; then
+	FRESH=1
+	shift
+fi
+
+if [ "$FRESH" = 1 ]; then
+	ENV_DIR="${LICHTBILD_FRESH_DEVENV:-$HOME/Developer/wp-lichtbild-fresh}"
+	DB_PORT=3308
+	WP_PORT=8081
+else
+	ENV_DIR="${LICHTBILD_DEVENV:-$HOME/Developer/wp-lichtbild}"
+	DB_PORT=3307
+	WP_PORT=8080
+fi
 
 MARIADB_PREFIX=/opt/homebrew/opt/mariadb@10.11
 PHP_VERSION=8.2
 PHP_BIN="/opt/homebrew/opt/php@${PHP_VERSION}/bin/php"
 
-DB_PORT=3307
 DB_SOCKET="$ENV_DIR/mysql.sock"
 DB_DATADIR="$ENV_DIR/mysql"
 DB_LOG="$ENV_DIR/mysql.log"
 
 WP_DIR="$ENV_DIR/wordpress"
-WP_PORT=8080
 WP_URL="http://localhost:$WP_PORT"
 WP_LOG="$ENV_DIR/web.log"
 
@@ -90,7 +115,12 @@ wp_cli() {
 	# deprecation-clean on 8.2+ — so `$(wp core version)` came back as a notice followed by a
 	# newline followed by the version, and every captured value was silently wrong. Sending
 	# them to stderr makes command substitution mean what it looks like it means.
+	# `memory_limit` is raised because wp-cli extracts the core zip in memory: a full download
+	# (one that keeps the bundled themes) dies at 128M with "Allowed memory size exhausted" in
+	# Extractor.php, and the failure lands on `core download` rather than on anything to do
+	# with this plugin.
 	"$PHP_BIN" -d display_errors=stderr -d error_reporting="E_ALL & ~E_DEPRECATED" \
+		-d memory_limit=512M \
 		/opt/homebrew/bin/wp --path="$WP_DIR" "$@"
 }
 
@@ -390,6 +420,148 @@ link_plugin() {
 	say "linked the plugin: $target -> $ROOT"
 }
 
+# The site nobody had ever built: an empty WordPress that installs Lichtbild Gallery FROM
+# wordpress.org, the way a stranger does. Everything above models the site this plugin was
+# written for -- a live Envira installation being taken over -- and that site can never exercise
+# the fresh-install path, because it starts with 52 galleries and the plugin symlinked in from
+# the working tree.
+#
+# Three differences from `setup` are deliberate and each one is the point:
+#
+# - **The plugin is installed, not linked.** What runs here is the archive the directory serves,
+#   which is a different set of bytes from the working tree: no `.po`/`.mo`, no `tools/`, no
+#   tests. `channels` compares those two sets; this runs one of them.
+# - **`DISALLOW_FILE_MODS` and `WP_HTTP_BLOCK_EXTERNAL` are OFF.** They are on in `setup` so a
+#   copy of the live site can never phone home. Here WordPress must reach api.wordpress.org --
+#   that request IS the subject.
+# - **WordPress is whatever the directory currently ships**, not pinned to the live site's
+#   version, because a stranger installs on today's WordPress.
+cmd_fresh() {
+	local from_zip=""
+	[ "${1:-}" = "--from" ] && { from_zip="${2:?usage: fresh --from <zip>}"; }
+
+	command -v /opt/homebrew/bin/wp >/dev/null || die "wp-cli missing: brew install wp-cli"
+	[ -x "$PHP_BIN" ] || die "PHP $PHP_VERSION missing: brew install php@$PHP_VERSION"
+	[ -x "$MARIADB_PREFIX/bin/mariadbd" ] || die "MariaDB missing: brew install mariadb@10.11"
+
+	mkdir -p "$ENV_DIR"
+
+	if [ ! -d "$DB_DATADIR" ]; then
+		say "initialising database data directory"
+		"$MARIADB_PREFIX/bin/mariadb-install-db" \
+			--datadir="$DB_DATADIR" --auth-root-authentication-method=normal \
+			>>"$DB_LOG" 2>&1 || die "mariadb-install-db failed - see $DB_LOG"
+	fi
+
+	start_db
+
+	say "creating database $DB_NAME (empty - this site has no history)"
+	mysql_client -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` DEFAULT CHARACTER SET utf8mb4;"
+	mysql_client -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1'; GRANT ALL PRIVILEGES ON *.* TO '$DB_USER'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+
+	# No `--skip-content` here, unlike `setup`: that flag omits the bundled themes, and a site
+	# with no theme serves an EMPTY body with HTTP 200 -- every markup check then fails while
+	# the same gallery renders perfectly through `do_shortcode()`, which reads as a plugin
+	# defect and is a missing theme. A stranger's WordPress has the default theme.
+	say "downloading WordPress (latest, because that is what a stranger installs on)"
+	wp_cli core download --force || die "core download failed"
+
+	say "writing wp-config.php"
+	wp_cli config create \
+		--dbname="$DB_NAME" --dbuser="$DB_USER" --dbhost="127.0.0.1:$DB_PORT" \
+		--dbprefix="$DB_PREFIX" --force --skip-check \
+		--extra-php <<-'PHP' || die "config create failed"
+		define( 'WP_DEBUG', true );
+		define( 'WP_DEBUG_LOG', true );
+		define( 'WP_DEBUG_DISPLAY', false );
+		// No DISALLOW_FILE_MODS and no WP_HTTP_BLOCK_EXTERNAL here, unlike the migration
+		// environment: this site has to be able to reach wordpress.org and install a plugin,
+		// which is the whole thing being tested.
+		PHP
+
+	say "installing WordPress"
+	wp_cli core install \
+		--url="$WP_URL" --title="Lichtbild fresh-install test" \
+		--admin_user=admin --admin_password=admin --admin_email=nobody@example.invalid \
+		--skip-email >/dev/null || die "core install failed - see wp-config.php DB_HOST"
+
+	wp_cli rewrite structure '/%postname%/' --hard >/dev/null || die "failed to set permalink structure"
+
+	# The subject. `--activate` on the same line so a plugin that fatals on activation fails
+	# here rather than in a later check that would blame something else.
+	#
+	# `--from <zip>` installs a locally built archive instead, which is what makes this
+	# environment useful BEFORE a release rather than only after one: a fix to the fresh-install
+	# path cannot be tested against the directory, because the directory still serves the build
+	# without it.
+	if [ -n "$from_zip" ]; then
+		[ -r "$from_zip" ] || die "no such archive: $from_zip"
+		say "installing lichtbild-gallery from $from_zip (LOCAL BUILD, not the directory)"
+		wp_cli plugin install "$from_zip" --activate --force || die "install from the archive failed"
+	else
+		say "installing lichtbild-gallery from wordpress.org"
+		wp_cli plugin install lichtbild-gallery --activate || die "install from the directory failed"
+	fi
+
+	verify_fresh "$from_zip"
+
+	say ""
+	say "ready. 'bash tools/devenv.sh fresh start' then 'bash tools/devenv.sh fresh test'"
+}
+
+# Positive evidence, same as `verify` above: each line is something a later check would depend
+# on silently. The version comparison is against the directory's own answer rather than against
+# a number written here, so it cannot go stale.
+verify_fresh() {
+	say "verifying"
+
+	local wp_version installed expected
+
+	wp_version="$(wp_value core version)"
+	installed="$(wp_value plugin get lichtbild-gallery --field=version)"
+	[ -n "$installed" ] || die "the plugin is not installed"
+
+	# The version is compared against whichever source it came FROM -- the directory's own
+	# answer, or the working tree's -- so neither comparison can go stale, and installing a
+	# local build never looks like a directory install that fetched the wrong version.
+	if [ -n "${1:-}" ]; then
+		expected="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" "$ROOT/lichtbild-gallery.php" | head -1)"
+		[ "$installed" = "$expected" ] || die "installed $installed from the archive, but the working tree says $expected"
+	else
+		expected="$(curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=lichtbild-gallery' \
+			| sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)"
+		[ -n "$expected" ] || die "could not read the published version from api.wordpress.org"
+		[ "$installed" = "$expected" ] || die "installed $installed but the directory serves $expected"
+	fi
+
+	wp_cli plugin is-active lichtbild-gallery || die "the plugin installed but is not active"
+
+	# A published build carries the .pot and NOT the catalogues, which is what makes the
+	# language-pack path the only source of German on a directory install. Asserted here
+	# because it is the difference between this site and the linked working tree.
+	local plugdir="$WP_DIR/wp-content/plugins/lichtbild-gallery"
+	[ -f "$plugdir/languages/lichtbild-gallery.pot" ] || die "the installed build has no .pot"
+	[ -z "$(ls "$plugdir/languages/"*.mo 2>/dev/null)" ] || die "the installed build ships a .mo, which the published one does not"
+
+	local source_name="the directory"
+	[ -n "${1:-}" ] && source_name="the archive"
+
+	say "  WordPress $wp_version, lichtbild-gallery $installed (matches $source_name), active"
+}
+
+# Runs tests/fresh-install.php against the fresh site. Separate from `cmd_fresh` so the
+# environment can be rebuilt without re-running the checks and vice versa -- and so a failing
+# check is a failing check, not a failed build.
+cmd_fresh_test() {
+	db_running || die "database not running: bash tools/devenv.sh fresh start"
+	web_running || die "web server not running: bash tools/devenv.sh fresh start"
+
+	# The HTTP half of the test fetches this site over the loopback, so the checks are only
+	# meaningful while the server is up -- asserted above rather than discovered as six failed
+	# checks that look like a broken plugin.
+	wp_cli eval-file "$ROOT/tests/fresh-install.php"
+}
+
 cmd_snapshot() {
 	db_running || start_db
 	mkdir -p "$SNAPSHOT_DIR"
@@ -436,8 +608,19 @@ cmd_status() {
 	wp_cli plugin list --status=active --field=name 2>/dev/null | sed 's/^/  /'
 }
 
+# `fresh` was consumed at the top of the file, so the subcommand is $1 either way and every
+# command below acts on whichever environment that selected. `fresh` alone means `fresh setup`,
+# and so does `fresh --from <zip>` -- without that second case an option lands in the subcommand
+# position, matches nothing, and the script prints its usage instead of building anything.
+if [ "$FRESH" = 1 ] && { [ -z "${1:-}" ] || [ "${1#--}" != "${1:-}" ]; }; then
+	set -- setup "$@"
+fi
+
 case "${1:-}" in
-	setup)    cmd_setup ;;
+	setup)    shift || true
+	          if [ "$FRESH" = 1 ]; then cmd_fresh "$@"; else cmd_setup; fi ;;
+	test)     [ "$FRESH" = 1 ] || die "'test' is a fresh-environment command: tools/devenv.sh fresh test"
+	          cmd_fresh_test ;;
 	start)    start_db; start_web ;;
 	stop)     stop_web; stop_db ;;
 	reset)    cmd_reset ;;

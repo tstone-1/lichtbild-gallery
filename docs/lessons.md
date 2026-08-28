@@ -1986,3 +1986,84 @@ read the first 404 as the answer on its own — the site is a JavaScript app, so
 scrape of the post reported "plugin URL present: False" purely because it had matched the
 template rather than the content, which is a false negative that would have sent us editing a
 post that was fine.
+
+---
+
+## The fresh install nobody had done, and the defect waiting in it (26.8.26)
+
+`AGENTS.md` had carried this line since the plugin was published: *"The gap no checklist covers:
+nobody has ever installed this plugin from scratch and made a gallery."* The fresh-install path
+was written in 26.8.18, is covered by the stub suite and was exercised against a stripped local
+WordPress — and none of that walks the path a stranger walks. Walking it once, on 2026-08-28,
+found one defect, and it sits in the one step no harness here could reach.
+
+**Every gallery permalink on a new install answered 404.** Rewrite rules are generated from the
+post types registered at flush time and then stored in the `rewrite_rules` option; a site whose
+rules were built before this plugin existed carries no `/gallery/`, `/album/` or `/gallery-tag/`
+rule, and nothing regenerates them. The plugin had no activation hook at all — `grep -rn
+flush_rewrite\|register_activation_hook` over the whole tree returned nothing — so the rules
+stayed as they were until somebody happened to re-save Settings → Permalinks.
+
+Measured rather than reasoned: a clean WordPress 7.1 with the published 26.8.25 installed from
+the directory had **94 rewrite rules, none of them Lichtbild's**, and `/gallery/fresh-gallery/`
+returned 404 while the same gallery rendered perfectly through its shortcode on a page in the
+same run. Deleting the option and issuing one request produced **22** gallery rules and a 200.
+
+**The A/B that makes the fix a fix, and the control that makes the A/B mean anything.**
+Deactivating and reactivating the *unfixed* plugin still returned 404 — so reactivation is not
+what repairs it. Overlaying only the fixed `lichtbild-gallery.php` and reactivating returned 200
+with 22 rules. One variable, one control, both directions.
+
+**`delete_option( 'rewrite_rules' )`, not `flush_rewrite_rules()`, and the difference is the
+whole point.** Activation runs after `init` has already fired for that request *without* the
+plugin loaded, so its post types are not registered yet; flushing there would persist a fresh
+set of rules that still lack them — the same wrong answer, written more confidently. Deleting
+the option defers the rebuild to the next request. It is the idiom
+`Lichtbild_Migration::finish()` already uses after a rename, for exactly the same reason.
+
+### Four things the harness got wrong before it got the plugin right
+
+Every one of them made correct code look broken, which is the failure mode that wastes the most
+time, and each was found by reading the harness rather than the plugin.
+
+- **`wp eval-file` runs the file inside a function**, so a top-level `$failed` is a *local* and
+  `global $failed` inside a helper reaches a different variable entirely. The first run printed
+  `0 checks, 0 failed` underneath six visible `[FAIL]` lines. A summary that cannot count is
+  worse than no summary, because it is the line a reader trusts. `$GLOBALS['fresh_failed']`
+  throughout.
+- **`wp core download --skip-content` leaves a site with no theme, and it answers HTTP 200 with
+  an EMPTY body.** Four markup checks failed against a gallery that `do_shortcode()` rendered
+  perfectly in the same run — which reads as "the plugin does not render on the front end". The
+  migration environment can pass `--skip-content` because its theme is fetched separately; a
+  stranger's WordPress has the bundled theme, so this one must not.
+- **The harness asserted a class the markup does not contain.** `lichtbild-grid` appears nowhere;
+  the wrapper is `lichtbild-wrap`. The tell was the neighbouring check counting **6** item nodes
+  in the same string — a check that fails while its neighbour succeeds on the same input is
+  usually about the assertion, not the subject.
+- **wp-cli extracts the core zip in memory and dies at 128M** with *"Allowed memory size
+  exhausted"* in `Extractor.php` the moment `--skip-content` is dropped. The failure lands on
+  `core download` and says nothing about this plugin; `-d memory_limit=512M` in the wp-cli
+  wrapper is the fix.
+
+### What this environment can and cannot say
+
+`bash tools/devenv.sh fresh` builds an empty WordPress on its own ports (3308/8081) beside the
+migration environment, and `fresh test` runs `tests/fresh-install.php`: 37 checks covering the
+slug scheme, the registrations, three real images through `wp_generate_attachment_metadata()`, a
+gallery saved through the editor's own `save_post` path with a real nonce, order and removal,
+image tags, the rendered markup, both URLs over HTTP, three admin screens behind a generated
+auth cookie, and an empty `debug.log`.
+
+Two limits worth stating rather than discovering later:
+
+- **It installs what the DIRECTORY serves**, so a fix to this path cannot be tested against it
+  until that fix is published. `fresh --from <zip>` installs a locally built archive instead,
+  which is what makes the environment useful before a release rather than only after one. Note
+  `tools/build-zip.sh` stages `git archive HEAD`, so the archive is committed bytes: an
+  uncommitted version bump is reported as *"version disagreement -- header=… constant=…"*, which
+  is true about the two sources it compares and misleading about the cause.
+- **It is not in CI and cannot be**, because it needs a real WordPress, a database and the
+  network. So the activation hook's only coverage is a harness a person runs deliberately —
+  which is worth saying out loud, since this repository's own standard is that a guard whose
+  deletion reddens nothing is either uncovered or not a guard. Deleting that hook reddens
+  exactly three checks, in a run nothing schedules.

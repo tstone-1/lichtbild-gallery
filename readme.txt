@@ -4,7 +4,7 @@ Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 26.8.25
+Stable tag: 26.8.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -97,6 +97,10 @@ than only in one gallery.
 4. The lightbox, showing the EXIF WordPress already parsed at upload.
 
 == Changelog ==
+
+= 26.8.26 =
+* Fixed: on a new installation, gallery, album and tag permalinks returned 404 until the
+  permalink settings were saved again. The rules are now rebuilt when the plugin is activated.
 
 = 26.8.25 =
 * Fixed: deleting the plugin and installing it again could leave migrated galleries in the

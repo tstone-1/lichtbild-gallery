@@ -3,7 +3,7 @@
  * Plugin Name: Lichtbild Gallery
  * Plugin URI:  https://github.com/tstone-1/lichtbild-gallery
  * Description: Responsive galleries for WordPress. Reads existing Envira Gallery data in place, so galleries keep working without migration or a licence.
- * Version:     26.8.25
+ * Version:     26.8.26
  * Author:      tstone-1
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -61,7 +61,7 @@ defined( 'ABSPATH' ) || exit;
  * on the local WordPress before relying on it.
  */
 
-define( 'LICHTBILD_VERSION', '26.8.25' );
+define( 'LICHTBILD_VERSION', '26.8.26' );
 define( 'LICHTBILD_FILE', __FILE__ );
 define( 'LICHTBILD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LICHTBILD_URL', plugin_dir_url( __FILE__ ) );
@@ -105,3 +105,29 @@ function lichtbild() {
 }
 
 add_action( 'plugins_loaded', 'lichtbild', 20 );
+
+/**
+ * Invalidates the rewrite rules on activation, so gallery permalinks resolve immediately.
+ *
+ * Rewrite rules are generated from the post types registered at flush time and then stored, so
+ * a site whose rules were built before this plugin existed carries no `/gallery/`, `/album/` or
+ * `/gallery-tag/` rule. Nothing regenerates them on its own: every gallery permalink answers
+ * 404 until someone happens to re-save Settings -> Permalinks, which reads as the plugin being
+ * broken rather than as a missing flush. Measured on a fresh install of the published 26.8.25 —
+ * 94 rules, none of them ours, and 404 on a gallery that renders perfectly through its
+ * shortcode.
+ *
+ * `delete_option()` rather than `flush_rewrite_rules()`, and the difference is the whole point:
+ * activation runs after `init` has already fired for this request WITHOUT this plugin loaded,
+ * so its post types are not registered yet and flushing here would persist a fresh set of rules
+ * that still lack them — the same wrong answer, written more confidently. Deleting the option
+ * defers the rebuild to the next request, by which time `init` has registered the types. It is
+ * the same idiom `Lichtbild_Migration::finish()` uses after a rename, for the same reason.
+ *
+ * @return void
+ */
+function lichtbild_activate() {
+	delete_option( 'rewrite_rules' );
+}
+
+register_activation_hook( __FILE__, 'lichtbild_activate' );

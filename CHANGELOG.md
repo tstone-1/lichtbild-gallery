@@ -18,6 +18,22 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [26.8.26] - 2026-08-28
+
+The first release cut after anyone installed this plugin the way a stranger does. That path had
+been written in 26.8.18, covered by the suite and by a stripped local WordPress, and never once
+walked end to end; walking it found one defect, in the step no test could reach.
+
+### Fixed
+- **Gallery, album and tag permalinks no longer 404 on a fresh install.** Rewrite rules are
+  generated from the post types registered at flush time and then stored, so a site whose rules
+  were built before this plugin existed carries no `/gallery/` rule and nothing regenerates one.
+  Every gallery permalink answered 404 until someone happened to re-save Settings -> Permalinks,
+  which reads as the plugin being broken. Measured on a clean WordPress 7.1 with the published
+  26.8.25 installed from the directory: 94 rewrite rules, none of them Lichtbild's, and a 404 on
+  a gallery whose shortcode rendered perfectly on a page in the same run. The plugin now
+  invalidates the rules on activation, and the same install answers 200 with 22 rules of its own.
+
 ## [26.8.25] - 2026-08-22
 
 Answers an independent read-only review of the whole codebase at `511df7e`. Two blockers, both

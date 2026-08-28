@@ -835,10 +835,21 @@ list. SVN here is a release system rather than a history — commit ready versio
 > is not specific to this repo, so it lives in the shared corpus rather than here: see the entry
 > on an empty side of a comparison, under *Shipping and deploying* in `agent-memory`.
 
-**The gap no checklist covers: nobody has ever installed this plugin from scratch and made a
-gallery.** The fresh-install path was written in 26.8.18 and is covered by the suite and by a
-stripped local WordPress, but that is the first thing every stranger does and it has only ever
-been exercised by a machine.
+**That gap is closed since 26.8.26, and walking it once found a defect no harness here could
+reach.** From publication until 2026-08-28 this said nobody had ever installed the plugin from
+scratch and made a gallery — the fresh-install path was written in 26.8.18 and covered by the
+suite, which is not the same as walking it. `bash tools/devenv.sh fresh` now builds an empty
+WordPress on its own ports, installs the plugin **from the directory**, and `fresh test` runs
+`tests/fresh-install.php` (37 checks, through the editor's own save path and over HTTP).
+
+- *The fresh install nobody had done, and the defect waiting in it (26.8.26)* — every gallery
+  permalink 404'd on a new install, because the plugin had no activation hook and stored rewrite
+  rules are built from the types registered at flush time: 94 rules with none of ours, against 22
+  and a 200 after invalidating them. `delete_option( 'rewrite_rules' )` rather than
+  `flush_rewrite_rules()`, because activation runs after `init` has fired without the plugin
+  loaded. Holds the control that reactivation alone does **not** fix it, four ways the new
+  harness made correct code look broken (a summary that counted zero under six failures, a
+  themeless site answering 200 with an empty body), and why this environment cannot be in CI.
 
 ## What the third review found (2026-08-22)
 
