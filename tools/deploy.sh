@@ -144,17 +144,7 @@ CHUNK=8192
 # one more transfer that can fail for no behavioural gain. LICENSE ships in the wordpress.org
 # ZIP, which is a different artifact.
 UPLOAD_ORDER=(
-	"assets/js/lichtbild.js"
-	"includes/class-lichtbild-album-editor.php"
-	"includes/class-lichtbild-migration-screen.php"
-	"includes/class-lichtbild-migration.php"
-	"includes/class-lichtbild-renderer.php"
-	"includes/class-lichtbild-repository.php"
-	"includes/class-lichtbild-settings.php"
-	"includes/class-lichtbild.php"
-	"languages/lichtbild-gallery-de_DE.mo"
 	"readme.txt"
-	"uninstall.php"
 	"lichtbild-gallery.php"
 )
 

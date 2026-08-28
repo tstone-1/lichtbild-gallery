@@ -19,6 +19,11 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.8.26 deploy, where a changed-nothing result is the correct one* — two files, 160 of
+  160 URLs byte-identical before and after, because the fix is an activation hook and activation
+  does not run on a site that is already active. Holds the first publish where `channels` was
+  green in both directions, the `--from <zip>` run that proved the release archive itself, and
+  why `audit` naming only two files was the whole ordering answer.
 - *The 26.8.25 switchover, verified against the database rather than against itself* — `compare`
   reported **160 of 160 changed**, which after a type rename is the expected artifact and worth
   nothing; the check that answered the question compared each gallery's rendered images against
@@ -143,6 +148,42 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.8.26 deploy, where a changed-nothing result is the correct one
+
+The release that fixed the fresh-install 404, deployed and published on 2026-08-28. Two files —
+`readme.txt` and `lichtbild-gallery.php` — and the interesting part is that **`compare` reported
+160 of 160 URLs byte-identical, and that is the right answer rather than a failed deploy.** The
+change is a `register_activation_hook`; activation does not run on a site that is already
+active, and the site's rewrite rules have carried the gallery types since the migration. A
+deploy whose visible effect is nothing is exactly what this one should be, which is only
+reassuring because `capture`/`compare` can tell "nothing changed" apart from "nothing was
+uploaded" — the digest check on the two files did that separately.
+
+**`audit` answered the upload set in one call, and it was the whole ordering argument.** It
+reported 38 files identical, 2 changed, 2 deliberately absent, and `plan` then derived: no new
+requires, no versioned assets, no methods dropped — *"none, so nothing to sequence"* three times
+over. An `UPLOAD_ORDER` of two files with no constraint between them is the easy case, and it is
+still worth running `audit` first, because the question it answers is what the SERVER has, not
+what this release touched.
+
+**The release archive was tested before it was published, which is new.** `tools/devenv.sh fresh
+--from build/lichtbild-gallery-26.8.26.zip` installed the actual archive into an empty WordPress
+7.1 and ran all 37 fresh-install checks green. Until this release the fresh-install path could
+only be tested against what the directory already served, which is a build without the fix in
+it — see *The fresh install nobody had done* in [`lessons.md`](lessons.md).
+
+**First publish where `channels` is green in both directions.** Site and directory both at
+26.8.26, 0 differing of 42 shipped files, 1 by design. The order was deliberate: FTPS first, SVN
+second, so the site was never behind the directory even briefly — a site behind the directory is
+offered an update in wp-admin, and applying it is what deletes the German `.mo`.
+
+**SVN, r3670765.** `rsync -a --delete --exclude .svn` from the unpacked archive into `trunk/`,
+`svn copy trunk tags/26.8.26`, one commit for both. Verified by `svn export`ing the committed tag
+back from the server and digest-comparing all 41 files against the local build — not by reading
+the commit output. The password came from `pbpaste` over `--password-from-stdin`; it is not in
+the login keychain, and `~/.subversion/auth/svn.simple/` is empty, so the next release needs it
+from the same place again: `profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`.
 
 ### The 26.8.25 switchover, verified against the database rather than against itself
 
