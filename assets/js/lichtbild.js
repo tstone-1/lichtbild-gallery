@@ -158,7 +158,7 @@
 		var self = this;
 
 		this.root.addEventListener( 'click', function ( event ) {
-			var link = event.target.closest ? event.target.closest( 'a.lichtbild-link' ) : null;
+			var link = event.target.closest( 'a.lichtbild-link' );
 
 			if ( ! link || ! self.root.contains( link ) ) {
 				return;

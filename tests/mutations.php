@@ -48,6 +48,7 @@ $standalone = 'includes/class-lichtbild-standalone.php';
 $ajax       = 'includes/class-lichtbild-ajax.php';
 $shortcode  = 'includes/class-lichtbild-shortcode.php';
 $album_editor = 'includes/class-lichtbild-album-editor.php';
+$editor       = 'includes/class-lichtbild-editor.php';
 $metabox      = 'includes/class-lichtbild-metabox-editor.php';
 $screen       = 'includes/class-lichtbild-migration-screen.php';
 $block        = 'includes/class-lichtbild-block.php';
@@ -1922,6 +1923,26 @@ $mutations = array(
 		'replace' => "\t\t\tif ( false ) {",
 		'expect'  => 'a failed seo copy is reported and claims no copied keys',
 		'why'     => 'the success notice would report keys copied that never landed',
+	),
+
+	// Two things that change no rendered byte and are asserted through the stub's counters:
+	// what `initialise()` asks the database, and what the gallery editor primes. Each kill
+	// proves the counter is wired to the code and not merely declared beside it.
+	array(
+		'id'      => 'MEMO1',
+		'file'    => $settings_php,
+		'find'    => "\t\tif ( \$this->initialised ) {\n\t\t\treturn;\n\t\t}\n",
+		'replace' => "\t\t// re-asked every time.\n",
+		'expect'  => 'the schema question is asked at most once per request',
+		'why'     => 'an un-migrated Envira site has no schema option, so without the memo every predicate call counts the posts table',
+	),
+	array(
+		'id'      => 'PRIME2',
+		'file'    => $editor,
+		'find'    => "\t\t\$this->prime_items( \$record['items'] );",
+		'replace' => "\t\t// primed nothing.",
+		'expect'  => 'the gallery editor primes its attachments in one call',
+		'why'     => 'priming changes no output, so only its absence can be asserted directly',
 	),
 
 );

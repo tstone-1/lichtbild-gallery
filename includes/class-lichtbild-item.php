@@ -379,6 +379,11 @@ class Lichtbild_Item {
 	public function alt() {
 		$alt = isset( $this->record['alt'] ) ? trim( (string) $this->record['alt'] ) : '';
 
+		// A literal two-character `""` is read as no alt text as well. It has NOT been observed
+		// on the site this was built from -- all 2,264 items there carry `''` -- and no fixture
+		// carries it, so this branch is untested by the suite. It stays because the alternative
+		// is worse for the one record that does have it: two quote characters would become the
+		// image's accessible name, and the fallback to the title below would never be reached.
 		if ( '' !== $alt && '""' !== $alt ) {
 			return $alt;
 		}

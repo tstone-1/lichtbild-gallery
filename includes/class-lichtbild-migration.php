@@ -408,7 +408,7 @@ class Lichtbild_Migration {
 	 * option that every path out of this class then has to remember to clear. A stranding lock
 	 * is a worse failure than the race it prevents.
 	 *
-	 * @return array{galleries:int,albums:int,terms:int,converted:int,albums_converted:int,seo_keys:int,errors:string[]}
+	 * @return array{galleries:int,albums:int,terms:int,converted:int,albums_converted:int,seo_keys:int,errors:string[],warnings:string[]}
 	 */
 	public function migrate() {
 		global $wpdb;

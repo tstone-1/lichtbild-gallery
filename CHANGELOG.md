@@ -18,6 +18,29 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [26.8.27] - Unreleased
+
+### Fixed
+- **An un-migrated Envira site no longer counts the posts table on every predicate call.**
+  `Lichtbild_Settings::initialise()` resolves an absent schema option from the rows, and on a
+  site continuing an Envira installation that option stays absent until the migration runs —
+  so every `has_migrated()` and `slug_scheme()` call re-ran the `COUNT(*)`: measured at 17
+  uncached queries for one minimal request, in the configuration the plugin documents as
+  "install beside Envira and change nothing". Introduced in 26.8.25 by the uninstall fix.
+  `initialise()` now runs once per instance; the suite counts `get_var()` calls across five
+  predicate calls and mutation `MEMO1` proves the count is wired to the code.
+- **The gallery edit screen primes its attachments in one call.** Each row read the attachment,
+  its meta and its terms unprimed — three queries per image, fifteen hundred on the 504-image
+  gallery — while the album editor's twin already primed. Asserted by call shape, as the
+  lightbox endpoint's priming is; mutation `PRIME2`.
+
+### Changed
+- `slug_scheme()` has its docblock back on the right method; `has_migrated()`'s docblock says
+  where its "never inferred from rows" rule has an exception; `migrate()`'s return shape names
+  `warnings`; the `'""'` alt sentinel in `Lichtbild_Item::alt()` says that it has not been
+  observed on any record here and why it stays; `lichtbild.js` drops a `closest` feature guard
+  that protected one of five unguarded calls.
+
 ## [26.8.26] - 2026-08-28
 
 The first release cut after anyone installed this plugin the way a stranger does. That path had

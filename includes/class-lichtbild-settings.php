@@ -59,6 +59,19 @@ class Lichtbild_Settings {
 	private $migration_screen = null;
 
 	/**
+	 * Whether `initialise()` has run on this instance.
+	 *
+	 * Per request, not per site. The option it writes is the durable answer, but an un-migrated
+	 * Envira site has no schema option -- nothing writes `1`, and the migration is what writes
+	 * `2` -- so without this every predicate call re-asked `has_owned_content()`: measured at 17
+	 * uncached `COUNT(*)` queries on `wp_posts` for one minimal request, in the configuration
+	 * the plugin documents as "install beside Envira and change nothing".
+	 *
+	 * @var bool
+	 */
+	private $initialised = false;
+
+	/**
 	 * Returns the URL paths this site serves galleries, albums and tag archives from.
 	 *
 	 * **Decided once and written down, never re-derived.** The derivation asks whether the site
@@ -81,11 +94,6 @@ class Lichtbild_Settings {
 	}
 
 	/**
-	 * Returns the recorded slug scheme, deciding and storing it on first use.
-	 *
-	 * @return string Either `envira` or `generic`.
-	 */
-	/**
 	 * Reports whether this site is continuing an Envira installation.
 	 *
 	 * The question "is there anything to roll back TO", asked once and named, because two places
@@ -97,6 +105,11 @@ class Lichtbild_Settings {
 		return 'envira' === $this->slug_scheme();
 	}
 
+	/**
+	 * Returns the recorded slug scheme, deciding and storing it on first use.
+	 *
+	 * @return string Either `envira` or `generic`.
+	 */
 	public function slug_scheme() {
 		$this->initialise();
 
@@ -158,6 +171,15 @@ class Lichtbild_Settings {
 	 * @return void
 	 */
 	private function initialise() {
+		// Once per instance, and an instance lives one request. Everything below is either a
+		// cached option read or a write that must not repeat; the one uncached query,
+		// `has_owned_content()`, is the reason this guard exists.
+		if ( $this->initialised ) {
+			return;
+		}
+
+		$this->initialised = true;
+
 		$schema = get_option( self::OPTION_SCHEMA, null );
 
 		/*
@@ -224,7 +246,7 @@ class Lichtbild_Settings {
 
 		// COUNT(*) rather than a LIMIT 1 probe, for the reason spelled out in
 		// `has_envira_history()`: a count is unambiguous to real WordPress and to the stub.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- asked only while the schema option is absent, which is once per site; the option it writes IS the cache.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- asked only while the schema option is absent, and at most once per request: `initialise()` memoises on the instance, because an un-migrated Envira site keeps that option absent until it migrates and this used to run on every predicate call.
 		$found = $wpdb->get_var(
 			"SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type IN ( 'lichtbild_gallery', 'lichtbild_album' )"
 		);
@@ -288,6 +310,10 @@ class Lichtbild_Settings {
 	 * Everything that names a post type has to agree with this, so it is a single stored
 	 * answer rather than something inferred by looking for rows — a site mid-migration, or
 	 * one where the migration failed partway, would give two different answers to a probe.
+	 *
+	 * The one exception is the option being absent altogether, which `initialise()` resolves
+	 * from the rows once and then stores: that is the uninstall-and-reinstall case, where the
+	 * settings are gone and the photographs are not. A stored answer is still what this reads.
 	 *
 	 * @return bool True once the migration has completed.
 	 */

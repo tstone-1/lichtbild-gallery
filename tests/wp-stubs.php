@@ -904,8 +904,21 @@ class Lichtbild_Test_wpdb {
 	 * @return int Row count.
 	 */
 	public function get_var( $sql ) {
+		$this->get_var_calls++;
+
 		return count( $this->matching( $sql ) );
 	}
+
+	/**
+	 * Number of `get_var()` calls so far.
+	 *
+	 * Real `$wpdb->get_var()` has no cache, so every call here is a query on the live site. The
+	 * suite reads this to assert that a question asked once per request is asked once, which no
+	 * output-based check can see: priming and memoising change no rendered byte.
+	 *
+	 * @var int
+	 */
+	public $get_var_calls = 0;
 
 	/**
 	 * Runs a single-column `SELECT`.

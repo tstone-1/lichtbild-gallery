@@ -2724,9 +2724,43 @@ $checks->assert(
 	'the settings form still carries a free-text CSS control'
 );
 
+$site->primed = array();
+
 ob_start();
 $editor->render_images_box( (object) array( 'ID' => $editor_id ) );
 $images_form = (string) ob_get_clean();
+
+// Priming changes no byte of the form, so only the shape of the call can be asserted: one call
+// naming every attachment the record carries, rather than none and rather than one per row.
+// The album editor's twin already primed; this screen was the last reader of a whole gallery
+// that did not, at three queries per image.
+$checks->expect( 'the gallery editor primes its attachments in one call' );
+
+$editor_stored = get_post_meta( $editor_id, Lichtbild_Repository::GALLERY_META_V2, true );
+$editor_wanted = array();
+
+foreach ( ( is_array( $editor_stored ) && isset( $editor_stored['items'] ) ? $editor_stored['items'] : array() ) as $stored_item ) {
+	if ( is_array( $stored_item ) && ! empty( $stored_item['id'] ) ) {
+		$editor_wanted[ (int) $stored_item['id'] ] = (int) $stored_item['id'];
+	}
+}
+
+$editor_primed = empty( $site->primed ) ? array() : array_map( 'intval', $site->primed[0]['ids'] );
+sort( $editor_wanted );
+sort( $editor_primed );
+
+$checks->assert(
+	'the gallery editor primes its attachments in one call',
+	1 === count( $site->primed ) && count( $editor_wanted ) > 1 && $editor_primed === array_values( $editor_wanted ),
+	sprintf(
+		'record has %d attachments; priming calls: %d, ids in the first: %d',
+		count( $editor_wanted ),
+		count( $site->primed ),
+		count( $editor_primed )
+	)
+);
+
+$site->primed = array();
 
 foreach ( Lichtbild_Item::record_keys() as $record_key ) {
 	$server_side = false !== strpos( $images_form, '][' . $record_key . ']' );
@@ -4832,6 +4866,32 @@ $checks->assert(
 	'the scheme is recorded, not re-derived',
 	'envira' === ( new Lichtbild_Settings() )->slug_scheme(),
 	'scheme after removing every signal: ' . ( new Lichtbild_Settings() )->slug_scheme()
+);
+
+// 5. The state above -- scheme recorded, schema absent -- is every Envira site from the day
+//    this plugin is installed until the day it migrates, because nothing writes schema 1 and
+//    only the migration writes 2. In that state `initialise()` cannot resolve the schema from
+//    the options, so it asks the posts table -- and it used to ask on EVERY predicate call:
+//    measured at 17 uncached `COUNT(*)` queries for one minimal request. The answer cannot
+//    change within a request, so it is asked at most once per instance. Priming and memoising
+//    change no output, which is why the instrument is the stub's query counter.
+$checks->expect( 'the schema question is asked at most once per request' );
+
+$counted_settings = new Lichtbild_Settings();
+$queries_before   = $GLOBALS['wpdb']->get_var_calls;
+
+$counted_settings->has_migrated();
+$counted_settings->slug_scheme();
+$counted_settings->continues_envira();
+$counted_settings->slug_scheme_paths();
+$counted_settings->has_migrated();
+
+$queries_asked = $GLOBALS['wpdb']->get_var_calls - $queries_before;
+
+$checks->assert(
+	'the schema question is asked at most once per request',
+	$queries_asked <= 1,
+	'five predicate calls on one instance issued ' . $queries_asked . ' get_var queries'
 );
 
 // A site that never had Envira starts on Lichtbild's own storage, and this is the check the whole

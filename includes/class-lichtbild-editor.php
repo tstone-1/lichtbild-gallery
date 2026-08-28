@@ -194,6 +194,12 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 
 		wp_nonce_field( self::NONCE_ACTION . $post_id, self::NONCE );
 
+		// Every row below reads the attachment's row, its meta and its terms -- three queries per
+		// image unprimed, which on a 504-image gallery is the same fifteen hundred the lightbox
+		// endpoint used to cost. This screen walks every item of the gallery in one request, and
+		// it was the last reader left without the priming the album editor's twin already does.
+		$this->prime_items( $record['items'] );
+
 		$order = array();
 
 		echo '<div class="lichtbild-editor" id="lichtbild-editor">';
@@ -226,6 +232,40 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 		echo '</div>';
 
 		$this->render_row_template();
+	}
+
+	/**
+	 * Primes the post, meta and term caches for a set of stored item records.
+	 *
+	 * The editor holds raw records rather than `Lichtbild_Item` objects, so it cannot hand them
+	 * to `Lichtbild_Gallery::prime()`; the call and the guard are the same as there.
+	 *
+	 * @param array $items Stored item records.
+	 *
+	 * @return int Number of attachments primed.
+	 */
+	private function prime_items( array $items ) {
+		$ids = array();
+
+		foreach ( $items as $item ) {
+			$id = isset( $item['id'] ) ? (int) $item['id'] : 0;
+
+			if ( $id > 0 ) {
+				$ids[ $id ] = $id;
+			}
+		}
+
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+
+		$ids = array_values( $ids );
+
+		if ( function_exists( '_prime_post_caches' ) ) {
+			_prime_post_caches( $ids, true, true );
+		}
+
+		return count( $ids );
 	}
 
 	/**
