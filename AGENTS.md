@@ -640,6 +640,11 @@ switchover. A catalogue rots on the next string added and the symptom is invisib
 test in CI. Two of its four lessons were superseded at 26.8.14 by `wp i18n make-pot`. Full text
 in [`docs/lessons.md`](docs/lessons.md).
 
+- *The catalogue has a second home since 2026-08-28, and it is the one that ends the hazard* —
+  `tstone1` is PTE for de_DE, both GlotPress projects are at 206/206, and a language pack lands
+  in `WP_LANG_DIR` where the deployed `.mo` is not the only source of German. Holds why six
+  strings arrive as *waiting* however complete the import is.
+
 ## Two defects a person found by looking at the site (26.8.11)
 
 The lightbox never filled the viewport and album covers left a hole — both live since the

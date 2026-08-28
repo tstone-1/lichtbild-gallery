@@ -2067,3 +2067,49 @@ Two limits worth stating rather than discovering later:
   which is worth saying out loud, since this repository's own standard is that a guard whose
   deletion reddens nothing is either uncovered or not a guard. Deleting that hook reddens
   exactly three checks, in a run nothing schedules.
+
+---
+
+## The catalogue has a second home since 2026-08-28, and it is the one that ends the hazard
+
+`tstone1` was granted Project Translation Editor for **de_DE** on 2026-08-27 (rights granted by
+`timse201`, announced on `make.wordpress.org/polyglots/2026/08/27/pte-request-for-lichtbild-gallery/`),
+and the repository's own `languages/lichtbild-gallery-de_DE.po` was imported into both GlotPress
+projects the next day. Both `stable` and `dev` read **206/206, 0 waiting**; the `readme`
+sub-projects (56 strings each) and the *German (Formal)* branch are deliberately at 0, the first
+because it translates the directory listing rather than the plugin and the second because the
+site runs `de_DE` default.
+
+**Why this matters beyond tidiness.** `deploy.sh channels` reports one standing `[HAZARD]`: the
+German catalogue is deployed over FTPS and deliberately absent from the published build, so a
+wordpress.org update removes it and 28 visitor-facing strings revert to English. A language pack
+is delivered into `WP_LANG_DIR/plugins/`, which every WordPress 6.x and 7.x just-in-time loader
+reads without being told to — the arrangement `lichtbild-gallery.php`'s own docblock already
+describes as where translations are supposed to come from. Once the pack exists, German no
+longer depends on a file an update can delete. Import the `.po`; do not add
+`load_plugin_textdomain()` back.
+
+**The pack is not built at import time.** `api.wordpress.org`'s `language_packs` was still empty
+hours after the import reached 100%, which is wordpress.org's build schedule rather than a
+fault. Check with:
+
+```sh
+curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=lichtbild-gallery' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin).get('language_packs') or 'none yet')"
+```
+
+### Six strings arrive as *waiting* however complete the import is, and the reason is German
+
+The import landed 200 of 206 as current and held six: `album`, `galleries`, `envira`, `gallery`,
+`images`, `photos` — every one of them a **block keyword** from `block.json`. GlotPress attached
+*"The translation appears to be missing the initial lowercase"*, because the source strings are
+lowercase by convention and German capitalises nouns, so `Galerien`, `Bilder`, `Fotos` trip a
+heuristic that is right about English and wrong here.
+
+A translation carrying a warning is held as *waiting* regardless of the translator's rights, so
+being PTE does not make it go through; the warning has to be discarded explicitly, per string,
+which is what that mechanism is for. **Do not silence it by lowercasing the German.** Block
+keywords are search terms in the inserter and are matched case-insensitively, so nothing would
+break — and `galerien` is simply misspelled German, which the locale's style guide exists to
+catch. The `warnings` count stays non-zero after approval; it is a flag on the string, not a
+queue, and `current`/`waiting` are what say whether the work is done.
