@@ -181,9 +181,11 @@ offered an update in wp-admin, and applying it is what deletes the German `.mo`.
 **SVN, r3670765.** `rsync -a --delete --exclude .svn` from the unpacked archive into `trunk/`,
 `svn copy trunk tags/26.8.26`, one commit for both. Verified by `svn export`ing the committed tag
 back from the server and digest-comparing all 41 files against the local build — not by reading
-the commit output. The password came from `pbpaste` over `--password-from-stdin`; it is not in
-the login keychain, and `~/.subversion/auth/svn.simple/` is empty, so the next release needs it
-from the same place again: `profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`.
+the commit output. The password came from `pbpaste` over `--password-from-stdin`. It was not in
+the login keychain at the time and `~/.subversion/auth/svn.simple/` was empty, so finding it cost
+a detour through `profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`; it was
+stored in the keychain immediately afterwards, and `AGENTS.md` carries the lookup. The next
+release does not repeat that hunt.
 
 ### The 26.8.25 switchover, verified against the database rather than against itself
 

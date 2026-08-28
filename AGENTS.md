@@ -826,9 +826,17 @@ them to the reviewed zip — **including the zip the directory rebuilds and actu
 which is a different archive of identical files. Two things to know for the next release:
 `svn` is `brew install svn` (macOS has not shipped it since 10.15), and the SVN password is
 **separate** from the wordpress.org login, set at
-`profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`. It goes in over
-`--password-from-stdin` from `pbpaste`, never as `--password`, which puts it in the argument
-list. SVN here is a release system rather than a history — commit ready versions only.
+`profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`. **Since 2026-08-28 it is
+in the macOS login keychain**, so it no longer has to be hunted for or regenerated:
+
+```sh
+security find-internet-password -s plugins.svn.wordpress.org -a tstone1 -w \
+  | svn commit -m "Lichtbild Gallery <version>" --username tstone1 --password-from-stdin --non-interactive
+```
+
+Piped, never `--password`, which puts it in the argument list; `svn` caches nothing, so
+`~/.subversion/auth/svn.simple/` stays empty and the keychain is the only copy. SVN here is a
+release system rather than a history — commit ready versions only.
 
 > That comparison ran once against a zip the directory was still generating and reported all 41
 > files as differences on a healthy publish — a truncated download, not a mismatch. The mechanism
