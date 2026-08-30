@@ -1240,6 +1240,10 @@ lichtbild_semantic() {
 	} | shasum | cut -d' ' -f1
 }
 
+cmd_urls() {
+	uv run --with pymysql python "$ROOT/tools/live-urls.py"
+}
+
 cmd_capture() {
 	local out="$1" urls="${2:-$WORK/urls.txt}"
 
@@ -1355,6 +1359,7 @@ case "${1:-}" in
 		cmd_audit "$@"
 		;;
 	plan) cmd_plan ;;
+	urls) cmd_urls ;;
 	# channels [--against <zip>] -- see the block above cmd_channels. Offline with --against.
 	channels)
 		shift
