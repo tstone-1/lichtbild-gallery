@@ -19,6 +19,12 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.8.27 deploy, whose release ceremony found two broken instruments* — 17 FTPS files,
+  every digest verified twice, and 160 of 160 URLs byte-identical as predicted. Holds the
+  constructor-arity order that points caller-before-definition, the documented `deploy.sh urls`
+  command that did not exist until this release tried it, and why mutation harnesses must not run
+  beside readers of the same working tree. SVN r3672297; 41 of 41 tag files match the archive and
+  both release channels agree on every shared byte.
 - *The 26.8.26 deploy, where a changed-nothing result is the correct one* — two files, 160 of
   160 URLs byte-identical before and after, because the fix is an activation hook and activation
   does not run on a site that is already active. Holds the first publish where `channels` was
@@ -148,6 +154,50 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.8.27 deploy, whose release ceremony found two broken instruments
+
+Released to the live site and wordpress.org on 2026-08-30. The server audit named **16 changed
+files before the version bump and 17 after it**; all 17 went over FTPS in chunks, every file was
+digest-verified immediately and the complete set was re-read once more: **0 mismatches**. The
+before/after comparison joined all **160 of 160** public URLs, with 0 non-200 responses, 0 changed
+bodies and 0 status differences. That was the prediction: the live-metadata setting defaults off,
+block creation is an admin path, and the visible responsive change lives in the stylesheet whose
+digest is checked separately.
+
+**The deploy order had a constructor edge pointing the unusual way.** `Lichtbild_Block` gained a
+third required constructor argument. Uploading that definition first would leave the deployed
+container calling it with two and fatal every request; uploading the container first is safe
+because PHP 8.1 through 8.5 accept an extra argument to the still-deployed user-defined
+constructor. So `class-lichtbild.php` preceded `class-lichtbild-block.php`. Separately,
+`Lichtbild_Item::use_live_metadata()` had to precede the Gallery caller, and all five versioned
+assets preceded the bootstrap. `plan` verified the asset and removed-method constraints; the
+constructor edge is recorded beside `UPLOAD_ORDER` because the planner cannot derive arity.
+
+**The archive was exercised as the artifact.** WordPress 7.1 installed it into a fresh site and
+passed 37 of 37 first-run checks. Plugin Check first reported one analyser warning on a title that
+is unslashed, type-checked and passed through `sanitize_text_field()` across three statements; the
+precise inline explanation made the final run 0 errors and 0 warnings. The PHP 8.1–8.5 matrix
+passed 249 checks per interpreter, and all 217 main plus 7 focused mutations died by their
+predicted checks. GitHub Actions run 33304532903 repeated the six jobs green at the pushed tip.
+
+**SVN r3672297.** The remote `tags/26.8.27` export contains 41 files and is content-identical to
+the committed archive. The directory-built ZIP and the FTPS tree have 0 shared-file differences;
+the deployed German `.mo` remains the one deliberate extra. The public API and listing report
+26.8.27, and the public Blueprint is byte-identical to `.wordpress-org/blueprints/blueprint.json`.
+The listing still has no native **Live Preview** button: its account-only Advanced-page toggle is
+off. The direct no-install Playground link in the FAQ works independently; enabling the directory
+button remains one manual wordpress.org setting.
+
+**Two instruments were wrong, both found by following the ceremony.** `deploy.sh` documented an
+`urls` subcommand in its usage and in this file, but its dispatcher had no such branch: it exited
+1 and printed the script header. Commit `0b9d879` added the missing wrapper around
+`tools/live-urls.py`, and the command then produced the expected 160 URLs. Later, running the
+mutation harness in parallel with the PHP matrix and channel comparison produced false failures:
+the harness deliberately edits production files before restoring them, while the readers sampled
+those mutations mid-run. Serial reruns were green and the tree restored byte-identically. CI is
+safe because the mutation and matrix jobs have separate checkouts; local orchestration must keep a
+mutation writer isolated from every working-tree reader.
 
 ### The 26.8.26 deploy, where a changed-nothing result is the correct one
 

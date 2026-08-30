@@ -6,9 +6,10 @@ version of.
 
 **Public and GPL-2.0-or-later**, with `LICENSE`, `README.md` and a wordpress.org-format
 `readme.txt`. `github.com/tstone-1/lichtbild-gallery` has been public since 2026-08-09 and the
-plugin was submitted to wordpress.org the same day; it was **approved on 2026-08-27** and is not
-yet listed, because the directory page exists only once the code is committed to SVN — the dated
-history is under *Submitting to wordpress.org* below.
+plugin was submitted to wordpress.org the same day, approved and published on **2026-08-27**, and
+is listed at `wordpress.org/plugins/lichtbild-gallery/`. The current release is **26.8.27**, live
+on the site and in the directory since 2026-08-30; the dated history is under *Submitting to
+wordpress.org* below.
 
 > Until 2026-08-22 this paragraph said the repository was **still private and nothing had been
 > submitted**, five days after both stopped being true, while a later section in this same file
