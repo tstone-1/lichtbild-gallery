@@ -49,6 +49,17 @@ class Lichtbild_Gallery {
 		$this->id       = (int) $id;
 		$this->settings = Lichtbild_Config::fill( $settings );
 		$this->items    = $items;
+
+		// `live_metadata` is a gallery setting whose effect is read per item, and this class is
+		// the only object that holds both halves — the repository builds the items before it has
+		// the settings, and the renderer sees the items one at a time. Applied here, every path
+		// that reaches an item goes through a gallery first, so the AJAX endpoints and the
+		// standalone page get the same answer as the shortcode without asking again.
+		$live = ! empty( $this->settings['live_metadata'] );
+
+		foreach ( $this->items as $item ) {
+			$item->use_live_metadata( $live );
+		}
 	}
 
 	/**

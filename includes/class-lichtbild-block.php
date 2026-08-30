@@ -35,6 +35,28 @@ defined( 'ABSPATH' ) || exit;
  * "modernises" this into a fetch: turning `show_in_rest` on would expose every gallery record
  * on a new public surface to answer a question the editor screen already knows the answer to.
  *
+ * WHY CREATING A GALLERY IS AN ADMIN-AJAX ENDPOINT AND NOT A SECOND REPRESENTATION
+ * ==============================================================================
+ *
+ * The block can create a gallery, and it creates the *entity* — a real draft post carrying a
+ * real `_lichtbild_gallery` record — then stores nothing but that post's ID. The alternative,
+ * keeping the chosen attachment IDs in the block's own attributes and rendering from those,
+ * would put a second writable representation of one gallery into every post that embeds it,
+ * which is precisely the state the write-path review had to eliminate once already. A gallery
+ * edited on its own screen has to stay current everywhere it is embedded, and that only holds
+ * while there is one copy of it.
+ *
+ * The same `show_in_rest => false` above is why creation goes over `admin-ajax.php` rather
+ * than over `/wp/v2/lichtbild_gallery`: the post type is deliberately not a REST resource, and
+ * making it one to answer a single POST would open a read surface on every gallery record.
+ * `Lichtbild_Ajax` and `Lichtbild_Album_Editor::handle_covers()` already establish the shape.
+ *
+ * Unlike the two front-end endpoints, this one **does refuse on its nonce**. Those two are
+ * public reads served from pages a full-page cache may have generated days ago; this one is an
+ * admin write, reached only from a block editor screen that is never cached, so a nonce here
+ * carries the meaning it is supposed to carry. There is no `nopriv` registration for the same
+ * reason: a logged-out visitor has no business creating a post.
+ *
  * WHAT THE EDITOR PREVIEW DELIBERATELY DOES NOT LOAD
  * ==================================================
  *
@@ -53,6 +75,14 @@ class Lichtbild_Block {
 	const HANDLE = 'lichtbild-blocks';
 
 	/**
+	 * `admin-ajax.php` action the block posts a new gallery to.
+	 *
+	 * The nonce action is deliberately the same string: one name for one operation, so a nonce
+	 * minted for this endpoint cannot be replayed against another.
+	 */
+	const CREATE_ACTION = 'lichtbild_create_gallery';
+
+	/**
 	 * The shortcode handler both render callbacks delegate to.
 	 *
 	 * @var Lichtbild_Shortcode
@@ -67,14 +97,31 @@ class Lichtbild_Block {
 	private $repository;
 
 	/**
+	 * Plugin settings, consulted for the post type to create in and whether it is safe to.
+	 *
+	 * @var Lichtbild_Settings
+	 */
+	private $settings;
+
+	/**
 	 * Builds the block registrar.
+	 *
+	 * Settings are required rather than optional, and the reason is worth stating because the
+	 * optional form looked harmless. A default of `null` with a lazy `new Lichtbild_Settings()`
+	 * behind it makes this class a second place that decides what it is made of: `Lichtbild`
+	 * would hand one object to every other collaborator while this one quietly built its own,
+	 * and the two would answer the same question — has this site migrated — from two separate
+	 * reads. A caller that forgets the argument should fail at construction, where the mistake
+	 * is, rather than work by accident.
 	 *
 	 * @param Lichtbild_Shortcode  $shortcode  Handler both blocks render through.
 	 * @param Lichtbild_Repository $repository Reader behind the picker.
+	 * @param Lichtbild_Settings   $settings   Plugin settings.
 	 */
-	public function __construct( Lichtbild_Shortcode $shortcode, Lichtbild_Repository $repository ) {
+	public function __construct( Lichtbild_Shortcode $shortcode, Lichtbild_Repository $repository, Lichtbild_Settings $settings ) {
 		$this->shortcode  = $shortcode;
 		$this->repository = $repository;
+		$this->settings   = $settings;
 	}
 
 	/**
@@ -85,6 +132,10 @@ class Lichtbild_Block {
 	public function register() {
 		add_action( 'init', array( $this, 'register_blocks' ) );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_editor_data' ) );
+
+		// No `wp_ajax_nopriv_` twin. This one writes a post, so there is no reading of it that
+		// makes sense for a logged-out visitor.
+		add_action( 'wp_ajax_' . self::CREATE_ACTION, array( $this, 'handle_create' ) );
 	}
 
 	/**
@@ -149,11 +200,281 @@ class Lichtbild_Block {
 	 * @return void
 	 */
 	public function enqueue_editor_data() {
+		// The create flow picks images through `wp.media`, which is core's own frame and is
+		// already loaded on the post editing screen. It is NOT loaded on every screen that
+		// fires this hook — the site editor and the widgets screen also do — so it is asked
+		// for here rather than assumed. `wp_enqueue_media()` returns immediately if it has
+		// already run, so asking twice costs nothing.
+		if ( function_exists( 'wp_enqueue_media' ) && $this->can_create() ) {
+			wp_enqueue_media();
+		}
+
 		wp_add_inline_script(
 			self::HANDLE,
 			'window.LichtbildBlocks = ' . wp_json_encode( $this->editor_data() ) . ';',
 			'before'
 		);
+	}
+
+	/**
+	 * Creates a draft gallery from a set of chosen attachments.
+	 *
+	 * Every refusal answers with a message the person in the editor can act on, because the
+	 * only thing the block can do with a bare 403 is say that something went wrong.
+	 *
+	 * @return void
+	 */
+	public function handle_create() {
+		check_ajax_referer( self::CREATE_ACTION, 'nonce' );
+
+		$blocked = $this->create_blocked_message();
+
+		if ( '' !== $blocked ) {
+			wp_send_json_error( array( 'message' => $blocked ), 403 );
+
+			return;
+		}
+
+		$ids = $this->requested_attachments();
+
+		if ( null === $ids ) {
+			wp_send_json_error(
+				array( 'message' => __( 'One or more of the chosen images is not an image on this site, or is not yours to use.', 'lichtbild-gallery' ) ),
+				400
+			);
+
+			return;
+		}
+
+		if ( empty( $ids ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Choose at least one image.', 'lichtbild-gallery' ) ),
+				400
+			);
+
+			return;
+		}
+
+		$title = $this->requested_title();
+
+		// `wp_slash()` on the way in, for the reason `Lichtbild_Editor::save()` gives: core's
+		// post and metadata layers unslash what they are handed, which is right for the raw
+		// `$_POST` they normally get and wrong for a value already unslashed above. Without it
+		// a gallery called `C:\Photos` loses a backslash per save and never says so.
+		$post_id = wp_insert_post(
+			array(
+				'post_type'   => Lichtbild_Post_Types::gallery_type( $this->settings ),
+				'post_status' => 'draft',
+				'post_title'  => wp_slash( $title ),
+			),
+			true
+		);
+
+		if ( is_wp_error( $post_id ) || (int) $post_id <= 0 ) {
+			wp_send_json_error(
+				array( 'message' => __( 'The gallery could not be saved. Please try again.', 'lichtbild-gallery' ) ),
+				500
+			);
+
+			return;
+		}
+
+		$post_id = (int) $post_id;
+
+		// The same record shape `Lichtbild_Editor::save()` writes, built through the same
+		// sanitiser — so a new gallery is indistinguishable from one made on the gallery
+		// screen, and there is one definition of what an item record holds. An item carrying
+		// only an attachment ID is complete: title, alt, dimensions and every URL are resolved
+		// from the attachment at render time, which is what keeps them current.
+		$stored = update_post_meta(
+			$post_id,
+			Lichtbild_Repository::GALLERY_META_V2,
+			wp_slash(
+				array(
+					'version'  => Lichtbild_Config::VERSION,
+					'settings' => Lichtbild_Config::defaults(),
+					'items'    => $this->items( $ids ),
+				)
+			)
+		);
+
+		// A post that exists with no record is the one state this endpoint must not leave
+		// behind, and it is worse than the insert having failed outright. `Lichtbild_Repository`
+		// finds no v2 record, falls through to an Envira record this gallery has never had, and
+		// answers nothing — so the editor adopts an ID that previews as empty, and the site
+		// gains a draft nobody asked for and nobody can explain. Delete it and say the gallery
+		// was not saved, which is what actually happened.
+		//
+		// Force-deleted rather than trashed: it was created by this request seconds ago, no
+		// visitor and no other screen has ever seen it, so a trash entry would be litter
+		// carrying no information. `false` is the only failure `update_post_meta()` reports —
+		// it answers an integer meta ID on insert and `true` on update, and `0` is neither.
+		if ( false === $stored ) {
+			wp_delete_post( $post_id, true );
+
+			wp_send_json_error(
+				array( 'message' => __( 'The gallery could not be saved. Please try again.', 'lichtbild-gallery' ) ),
+				500
+			);
+
+			return;
+		}
+
+		wp_send_json_success(
+			array(
+				'id'      => $post_id,
+				'title'   => $title,
+				'images'  => count( $ids ),
+				'editUrl' => (string) get_edit_post_link( $post_id, 'raw' ),
+			)
+		);
+	}
+
+	/**
+	 * Turns attachment IDs into stored item records.
+	 *
+	 * @param int[] $ids Attachment IDs, in the order they were chosen.
+	 *
+	 * @return array Item records, in the same order.
+	 */
+	private function items( array $ids ) {
+		$items = array();
+
+		foreach ( $ids as $id ) {
+			$record = Lichtbild_Item::sanitize_record( array( 'id' => $id ) );
+
+			if ( null !== $record ) {
+				$items[] = $record;
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Reads the submitted gallery name.
+	 *
+	 * @return string A non-empty title.
+	 */
+	private function requested_title() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce is verified in `handle_create()`, this method's only caller, and the value is deliberately kept in its original type until the array guard below before the string is passed through `sanitize_text_field()`; a static analyser cannot follow either across these statements.
+		$raw = isset( $_POST['title'] ) ? wp_unslash( $_POST['title'] ) : '';
+
+		// A form field is a string or it is absent, but `title[]=x` submits an array and
+		// nothing stops a request carrying one. Cast, that becomes a gallery literally named
+		// "Array"; read as unsubmitted, it becomes the default below.
+		$title = is_string( $raw ) ? sanitize_text_field( $raw ) : '';
+
+		return '' !== $title ? $title : __( 'Untitled gallery', 'lichtbild-gallery' );
+	}
+
+	/**
+	 * Reads and validates the chosen attachments.
+	 *
+	 * **Refuses the whole request rather than dropping what it cannot use**, because dropping
+	 * is silent: a gallery would be created with fewer images than were chosen, and nothing
+	 * would say which ones or why. The media frame only offers what the current user can see,
+	 * so in ordinary use this cannot fire — it is here for a request that did not come from
+	 * the frame.
+	 *
+	 * The capability asked is `read_post` on each attachment, and it is worth saying why it is
+	 * not `edit_post`. Creating a gallery writes nothing to the attachment; it records that the
+	 * image is shown here. `Lichtbild_Editor::save_tags()` asks `edit_post` because that write
+	 * *does* change the attachment, and changes it in every other gallery holding it. The
+	 * question this endpoint has to answer is the picker's — may this person see that this
+	 * image exists — and asking a stricter one would stop an author placing an image somebody
+	 * else uploaded, which is the ordinary case on a site with more than one author.
+	 *
+	 * @return int[]|null Attachment IDs in the chosen order, or null when the request is not
+	 *                    one this endpoint will act on.
+	 */
+	private function requested_attachments() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce is verified in `handle_create()`, this method's only caller; every value is cast to int and checked against a real attachment below, which is the sanitisation, and it cannot happen at the read because a non-scalar has to reach the `is_scalar()` test intact rather than be coerced first.
+		$raw = isset( $_POST['images'] ) ? wp_unslash( $_POST['images'] ) : array();
+
+		if ( ! is_array( $raw ) ) {
+			return null;
+		}
+
+		$ids = array();
+
+		foreach ( $raw as $value ) {
+			if ( ! is_scalar( $value ) ) {
+				return null;
+			}
+
+			$id = (int) $value;
+
+			if ( $id <= 0 || 'attachment' !== get_post_type( $id ) ) {
+				return null;
+			}
+
+			// An attachment is not necessarily an image. A PDF, an MP3 and a video are all
+			// attachments on an ordinary site, and every one of them would be stored as a
+			// perfectly valid item record that resolves to no dimensions, no srcset and a
+			// lightbox slide with nothing in it — the `0x0` case `Lichtbild_Item` already has to
+			// keep out of PhotoSwipe's zoom arithmetic, arriving through the front door.
+			//
+			// `wp_attachment_is_image()` is the same question the media frame's
+			// `library: { type: 'image' }` filter answers on the client, asked again here
+			// because a filter in a frame is markup, and markup is a suggestion.
+			if ( ! wp_attachment_is_image( $id ) ) {
+				return null;
+			}
+
+			if ( ! current_user_can( 'read_post', $id ) ) {
+				return null;
+			}
+
+			// The same image twice is a legitimate gallery — `build_from_own()` stores an
+			// ordered list precisely so that it can be — but a media frame cannot select one
+			// twice, so a repeat here is a malformed request rather than an intention.
+			if ( ! in_array( $id, $ids, true ) ) {
+				$ids[] = $id;
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Reports whether the current user may create a gallery from a block.
+	 *
+	 * @return bool True when the create flow is available.
+	 */
+	private function can_create() {
+		return '' === $this->create_blocked_message();
+	}
+
+	/**
+	 * Explains why the create flow is unavailable, or returns an empty string when it is not.
+	 *
+	 * One method rather than a predicate and a separate message, so the reason shown in the
+	 * editor and the reason the endpoint refuses on cannot say different things.
+	 *
+	 * @return string A message for the person in the editor, or '' when creation is allowed.
+	 */
+	private function create_blocked_message() {
+		// The same rule `Lichtbild_Editor` enforces, seen from the other side: this writes a
+		// v2 record, and a v2 record is authoritative only on a migrated site. Written any
+		// earlier it would save perfectly and change nothing a visitor sees.
+		if ( ! $this->settings->has_migrated() ) {
+			return __( 'Galleries can be created here once this site is on Lichtbild storage. Run the migration under Settings > Lichtbild.', 'lichtbild-gallery' );
+		}
+
+		$type = get_post_type_object( Lichtbild_Post_Types::gallery_type( $this->settings ) );
+
+		if ( ! is_object( $type ) || ! isset( $type->cap->create_posts ) ) {
+			return __( 'Galleries cannot be created right now.', 'lichtbild-gallery' );
+		}
+
+		// Two capabilities because the flow does two things: it creates a post, and it reads
+		// the media library to fill it. Someone who may do only one of those cannot finish.
+		if ( ! current_user_can( $type->cap->create_posts ) || ! current_user_can( 'upload_files' ) ) {
+			return __( 'You do not have permission to create galleries.', 'lichtbild-gallery' );
+		}
+
+		return '';
 	}
 
 	/**
@@ -198,26 +519,51 @@ class Lichtbild_Block {
 	/**
 	 * Builds the data the editor script needs.
 	 *
-	 * @return array{galleries:array,albums:array,i18n:array} Picker choices and UI strings.
+	 * A nonce is minted here rather than in `register_blocks()` for the same reason the choices
+	 * are: it is only ever read by a block editor screen, and a nonce is bound to the user and
+	 * the session, so printing one on every front-end request would be both wasted and wrong.
+	 *
+	 * @return array Picker choices, the create endpoint's coordinates and the UI strings.
 	 */
 	private function editor_data() {
+		$blocked = $this->create_blocked_message();
+
 		return array(
-			'galleries' => $this->options( $this->repository->gallery_choices() ),
-			'albums'    => $this->options( $this->repository->album_choices() ),
-			'i18n'      => array(
-				'galleryTitle'        => __( 'Lichtbild Gallery', 'lichtbild-gallery' ),
-				'albumTitle'          => __( 'Lichtbild Album', 'lichtbild-gallery' ),
-				'chooseGallery'       => __( 'Choose a gallery', 'lichtbild-gallery' ),
-				'chooseAlbum'         => __( 'Choose an album', 'lichtbild-gallery' ),
-				'galleryInstructions' => __( 'Pick one of the galleries on this site. Edit its images and settings on the gallery itself, not here.', 'lichtbild-gallery' ),
-				'albumInstructions'   => __( 'Pick one of the albums on this site. Edit its galleries and settings on the album itself, not here.', 'lichtbild-gallery' ),
-				'settings'            => __( 'Gallery', 'lichtbild-gallery' ),
-				'albumSettings'       => __( 'Album', 'lichtbild-gallery' ),
-				'none'                => __( '— Select —', 'lichtbild-gallery' ),
-				'noGalleries'         => __( 'This site has no galleries yet.', 'lichtbild-gallery' ),
-				'noAlbums'            => __( 'This site has no albums yet.', 'lichtbild-gallery' ),
-				'emptyGallery'        => __( 'This gallery has nothing to show. It may be empty, a draft, or password-protected.', 'lichtbild-gallery' ),
-				'emptyAlbum'          => __( 'This album has nothing to show. It may be empty, a draft, or password-protected.', 'lichtbild-gallery' ),
+			'galleries'    => $this->options( $this->repository->gallery_choices() ),
+			'albums'       => $this->options( $this->repository->album_choices() ),
+			'canCreate'    => '' === $blocked,
+			'createReason' => $blocked,
+			'createAction' => self::CREATE_ACTION,
+			'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+			// Only minted for someone who may actually use it: a nonce handed to a user the
+			// endpoint will refuse anyway is a token with no purpose.
+			'createNonce'  => '' === $blocked ? wp_create_nonce( self::CREATE_ACTION ) : '',
+			'i18n'         => array(
+				'galleryTitle'              => __( 'Lichtbild Gallery', 'lichtbild-gallery' ),
+				'albumTitle'                => __( 'Lichtbild Album', 'lichtbild-gallery' ),
+				'chooseGallery'             => __( 'Choose a gallery', 'lichtbild-gallery' ),
+				'chooseAlbum'               => __( 'Choose an album', 'lichtbild-gallery' ),
+				'galleryInstructions'       => __( 'Pick one of the galleries on this site. Edit its images and settings on the gallery itself, not here.', 'lichtbild-gallery' ),
+				'galleryCreateInstructions' => __( 'Make a new gallery from images in your media library, or place one that already exists.', 'lichtbild-gallery' ),
+				'albumInstructions'         => __( 'Pick one of the albums on this site. Edit its galleries and settings on the album itself, not here.', 'lichtbild-gallery' ),
+				'settings'                  => __( 'Gallery', 'lichtbild-gallery' ),
+				'albumSettings'             => __( 'Album', 'lichtbild-gallery' ),
+				'none'                      => __( '— Select —', 'lichtbild-gallery' ),
+				'noGalleries'               => __( 'This site has no galleries yet.', 'lichtbild-gallery' ),
+				'noAlbums'                  => __( 'This site has no albums yet.', 'lichtbild-gallery' ),
+				'emptyGallery'              => __( 'This gallery has nothing to show. It may be empty, a draft, or password-protected.', 'lichtbild-gallery' ),
+				'emptyAlbum'                => __( 'This album has nothing to show. It may be empty, a draft, or password-protected.', 'lichtbild-gallery' ),
+				'galleryName'               => __( 'Gallery name', 'lichtbild-gallery' ),
+				'createGallery'             => __( 'Create a gallery', 'lichtbild-gallery' ),
+				'chooseExisting'            => __( 'Or choose an existing gallery', 'lichtbild-gallery' ),
+				'chooseImages'              => __( 'Choose images for this gallery', 'lichtbild-gallery' ),
+				'useImages'                 => __( 'Add to gallery', 'lichtbild-gallery' ),
+				'creating'                  => __( 'Creating the gallery…', 'lichtbild-gallery' ),
+				'createFailed'              => __( 'The gallery could not be created. Please try again.', 'lichtbild-gallery' ),
+				'chooseAtLeastOne'          => __( 'Choose at least one image.', 'lichtbild-gallery' ),
+				'mediaUnavailable'          => __( 'The media library is not available on this screen, so the gallery has to be made from the Lichtbild menu.', 'lichtbild-gallery' ),
+				'draftNotice'               => __( 'This gallery is a draft, so visitors will not see it until you publish it.', 'lichtbild-gallery' ),
+				'editGallery'               => __( 'Edit this gallery', 'lichtbild-gallery' ),
 			),
 		);
 	}

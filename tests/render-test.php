@@ -5892,7 +5892,7 @@ $block_assets = new Lichtbild_Test_Assets( new Lichtbild_Settings() );
 $block_assets->register();
 $block_assets->register_assets();
 
-$block = new Lichtbild_Block( $shortcode, new Lichtbild_Repository() );
+$block = new Lichtbild_Block( $shortcode, new Lichtbild_Repository(), new Lichtbild_Settings() );
 
 // Registration on its own must read nothing. It runs on `init`, so on every request including
 // every front-end page view -- and building the picker's choices reads each gallery row through
@@ -5985,7 +5985,7 @@ $site->galleries[ $locked_id ]['status'] = 'draft';
 $site->capabilities                      = false;
 $site->build_tables();
 
-$block_draft = ( new Lichtbild_Block( $shortcode, new Lichtbild_Repository() ) )
+$block_draft = ( new Lichtbild_Block( $shortcode, new Lichtbild_Repository(), new Lichtbild_Settings() ) )
 	->render_gallery( array( 'id' => $locked_id ) );
 
 $site->galleries[ $locked_id ]['status'] = $block_status;

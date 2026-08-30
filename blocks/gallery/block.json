@@ -5,7 +5,7 @@
 	"title": "Lichtbild Gallery",
 	"category": "media",
 	"icon": "format-gallery",
-	"description": "Places an existing Lichtbild gallery in the post.",
+	"description": "Makes a new Lichtbild gallery, or places one that already exists.",
 	"keywords": [ "gallery", "images", "photos", "envira" ],
 	"textdomain": "lichtbild-gallery",
 	"attributes": {

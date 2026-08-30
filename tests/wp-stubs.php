@@ -216,6 +216,19 @@ class Lichtbild_Test_Site {
 	public $primed = array();
 
 	/**
+	 * Every write attempted this run, each `array{fn:string,post:int,key:string}`.
+	 *
+	 * Recorded rather than inferred from the stored rows, because the two answer different
+	 * questions. This stub only keeps the meta keys it is asked about, so a write to any other
+	 * key — an attachment's alt text, say — lands nowhere and is therefore invisible to a
+	 * before/after comparison of the fixture. A check asserting that reading a gallery never
+	 * writes to the media library needs to see the CALL, not its effect.
+	 *
+	 * @var array<int,array>
+	 */
+	public $writes = array();
+
+	/**
 	 * Records whether one fixture record carries password data, and whether it is protected.
 	 *
 	 * @param array $record A gallery or album record from the fixture.
@@ -334,40 +347,51 @@ class Lichtbild_Test_Site {
 /**
  * Returns post meta for a gallery, album or attachment.
  *
+ * `$single` decides the SHAPE of the answer, and core's two shapes are not interchangeable:
+ * with it true a stored value comes back as itself and an absent key as `''`; with it false the
+ * answer is the list of stored values, so an absent key is `array()` and a key holding an empty
+ * string is `array( '' )`. This stub used to ignore the argument and hand back the scalar either
+ * way, which models a WordPress that cannot tell an absent meta row from an empty one — the
+ * exact distinction a caller would reach for `$single = false` to make. A stub that collapses it
+ * makes any code written on top of that distinction untestable in both directions at once.
+ *
  * @param int    $post_id Post ID.
  * @param string $key     Meta key.
- * @param bool   $single  Whether to return a single value.
+ * @param bool   $single  Whether to return a single value rather than the list of them.
  *
- * @return mixed Meta value.
+ * @return mixed Meta value, or the list of values when `$single` is false.
  */
 function get_post_meta( $post_id, $key = '', $single = false ) {
-	$site = Lichtbild_Test_Site::$instance;
+	$site   = Lichtbild_Test_Site::$instance;
+	$stored = array();
 
-	if ( '_lichtbild_gallery' === $key ) {
-		return isset( $site->galleries[ $post_id ]['lichtbild'] )
-			? $site->galleries[ $post_id ]['lichtbild']
-			: '';
+	if ( '_lichtbild_gallery' === $key && isset( $site->galleries[ $post_id ]['lichtbild'] ) ) {
+		$stored = array( $site->galleries[ $post_id ]['lichtbild'] );
 	}
 
-	if ( '_lichtbild_album' === $key ) {
-		return isset( $site->albums[ $post_id ]['lichtbild'] )
-			? $site->albums[ $post_id ]['lichtbild']
-			: '';
+	if ( '_lichtbild_album' === $key && isset( $site->albums[ $post_id ]['lichtbild'] ) ) {
+		$stored = array( $site->albums[ $post_id ]['lichtbild'] );
 	}
 
 	if ( '_eg_gallery_data' === $key && isset( $site->galleries[ $post_id ]['data'] ) ) {
-		return $site->galleries[ $post_id ]['data'];
+		$stored = array( $site->galleries[ $post_id ]['data'] );
 	}
 
 	if ( '_eg_album_data' === $key && isset( $site->albums[ $post_id ]['data'] ) ) {
-		return $site->albums[ $post_id ]['data'];
+		$stored = array( $site->albums[ $post_id ]['data'] );
 	}
 
 	if ( '_wp_attachment_image_alt' === $key && isset( $site->attachments[ $post_id ]['alt'] ) ) {
-		return $site->attachments[ $post_id ]['alt'];
+		$stored = array( (string) $site->attachments[ $post_id ]['alt'] );
 	}
 
-	return $single ? '' : array();
+	if ( ! $single ) {
+		return $stored;
+	}
+
+	// `reset()` on an empty array is `false`, and core answers `''` for a key it has no row for,
+	// so the two cases are separated here rather than left to PHP's falsy shorthand.
+	return array() === $stored ? '' : reset( $stored );
 }
 
 /**
@@ -753,6 +777,12 @@ function delete_option( $name ) {
  */
 function update_post_meta( $post_id, $key, $value ) {
 	$site = Lichtbild_Test_Site::$instance;
+
+	$site->writes[] = array(
+		'fn'   => 'update_post_meta',
+		'post' => (int) $post_id,
+		'key'  => (string) $key,
+	);
 
 	// A write that silently does not land is the case the migration's read-back exists for,
 	// and it is unreachable unless the stub can produce it.
@@ -1592,6 +1622,12 @@ function wp_get_attachment_image_url( $attachment_id, $size = 'thumbnail' ) {
 function wp_set_object_terms( $object_id, $terms, $taxonomy ) {
 	$site = Lichtbild_Test_Site::$instance;
 
+	$site->writes[] = array(
+		'fn'   => 'wp_set_object_terms',
+		'post' => (int) $object_id,
+		'key'  => (string) $taxonomy,
+	);
+
 	if ( $site->tag_taxonomy() !== $taxonomy ) {
 		return array();
 	}
@@ -2122,6 +2158,45 @@ function register_post_type( $name, $args = array() ) {
 	$site->registered[]           = $name;
 	$site->rewrite_slugs[ $name ] = isset( $args['rewrite']['slug'] ) ? $args['rewrite']['slug'] : '';
 	$site->menu_parents[ $name ]  = isset( $args['show_in_menu'] ) ? $args['show_in_menu'] : '';
+}
+
+/**
+ * Returns the minimal post-type object the block creator consults.
+ *
+ * WordPress returns null when a type was not registered in this request. Modelling that
+ * absence matters after the migration mutations: they change the stored type mid-request,
+ * but the request's registrations still describe the state it started in.
+ *
+ * @param string $name Post type name.
+ *
+ * @return object|null Registered type details, or null when the type is absent.
+ */
+function get_post_type_object( $name ) {
+	$site = Lichtbild_Test_Site::$instance;
+
+	if ( ! empty( $GLOBALS['lichtbild_no_post_type'] ) ) {
+		return null;
+	}
+
+	// The focused create test supplies a distinct capability so a typo in the production
+	// lookup cannot pass against the broad site-wide capability flag.
+	if ( isset( $GLOBALS['lichtbild_post_type_create_cap'] ) ) {
+		return (object) array(
+			'cap' => (object) array(
+				'create_posts' => (string) $GLOBALS['lichtbild_post_type_create_cap'],
+			),
+		);
+	}
+
+	if ( ! in_array( $name, $site->registered, true ) ) {
+		return null;
+	}
+
+	return (object) array(
+		'cap' => (object) array(
+			'create_posts' => 'edit_posts',
+		),
+	);
 }
 
 /**

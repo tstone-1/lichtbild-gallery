@@ -362,6 +362,49 @@
 	.lichtbild-wrap {
 		--lichtbild-row: 110;
 	}
+
+	/* A fixed-column gallery gives up its configured count on a narrow screen, because that
+	 * count is a choice about a wide viewport and about nothing else. Six columns is a
+	 * reasonable contact sheet at 1200px and 55px thumbnails at 390px — small enough that the
+	 * photographs stop being what the visitor sees.
+	 *
+	 * The cap is `min()` rather than a number so it can only ever REDUCE the count. A gallery
+	 * set to two columns stays at two here and at two below; one stays at one. Writing
+	 * `repeat( 3, ... )` would silently promote both, which is the same defect pointing the
+	 * other way and is why this is not a plain override.
+	 *
+	 * `min()` cannot be `repeat()`'s count — that position takes an `<integer>`, and support for
+	 * math functions there is not something a plugin can rely on — so the container becomes a
+	 * wrapping flex box and the items carry the track arithmetic themselves. That arithmetic is
+	 * the grid's own: the row, less the gaps between N items, divided by N. It is the same
+	 * substitution the album covers make just above, for the same reason.
+	 *
+	 * `grid-template-columns: none` is stated rather than left to be overridden, because it is
+	 * inert on a flex container — no error, no warning, no fallback — and a desktop track list
+	 * silently in force under a flex container is exactly what 26.8.12 was. */
+	.lichtbild-columns {
+		display: flex;
+		flex-wrap: wrap;
+		grid-template-columns: none;
+	}
+
+	.lichtbild-columns .lichtbild-item {
+		--lichtbild-columns-now: min(var(--lichtbild-columns), 3);
+		flex: 0 1 calc(
+			(100% - (var(--lichtbild-columns-now) - 1) * var(--lichtbild-gap)) /
+			var(--lichtbild-columns-now)
+		);
+		min-width: 0;
+	}
+}
+
+/* Phone portrait. Only the cap moves — the flex rule above reads this variable, so the
+ * arithmetic is written once. Two columns at 390px puts each image at about 190px, which is
+ * the same width the album covers settle at one section above. */
+@media (max-width: 480px) {
+	.lichtbild-columns .lichtbild-item {
+		--lichtbild-columns-now: min(var(--lichtbild-columns), 2);
+	}
 }
 
 /* Lightbox additions ------------------------------------------------------ */

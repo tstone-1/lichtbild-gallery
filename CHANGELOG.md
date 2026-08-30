@@ -18,7 +18,17 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
-## [26.8.27] - Unreleased
+## [26.8.27] - 2026-08-30
+
+### Added
+- **A gallery can now be created directly from the Gallery block.** Name it, choose images in
+  the Media Library, and the block creates one canonical draft gallery and stores only its ID.
+  The gallery remains reusable and editable from the Lichtbild screen; failed record writes are
+  cleaned up rather than leaving empty drafts behind.
+- **Galleries can opt into current Media Library titles, captions and alt text.** The existing
+  per-gallery values remain the default and the fallback, so migrated galleries do not change
+  until the setting is enabled and switching it off is lossless.
+- **A WordPress Playground blueprint now powers a no-install demo** from the plugin listing.
 
 ### Fixed
 - **An un-migrated Envira site no longer counts the posts table on every predicate call.**
@@ -35,6 +45,11 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
   lightbox endpoint's priming is; mutation `PRIME2`.
 
 ### Changed
+- Fixed-column galleries now cap themselves at three columns on narrow screens and two on
+  phones, without increasing galleries configured for only one or two columns.
+- The wordpress.org description now leads with visitor and site-owner benefits, the banner has
+  a user-facing tagline, WordPress 7.1 is recorded as tested, and the obsolete pre-rename editor
+  screenshot has been removed.
 - `slug_scheme()` has its docblock back on the right method; `has_migrated()`'s docblock says
   where its "never inferred from rows" rule has an exception; `migrate()`'s return shape names
   `warnings`; the `'""'` alt sentinel in `Lichtbild_Item::alt()` says that it has not been

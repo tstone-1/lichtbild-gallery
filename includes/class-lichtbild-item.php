@@ -58,6 +58,13 @@ class Lichtbild_Item {
 	private $tag_taxonomy;
 
 	/**
+	 * Whether the media library's current values win over the gallery's frozen ones.
+	 *
+	 * @var bool
+	 */
+	private $live_metadata = false;
+
+	/**
 	 * Wraps one Envira gallery item.
 	 *
 	 * @param int    $id           Attachment ID, or 0 when unknown.
@@ -68,6 +75,30 @@ class Lichtbild_Item {
 		$this->id           = (int) $id;
 		$this->record       = $record;
 		$this->tag_taxonomy = (string) $tag_taxonomy;
+	}
+
+	/**
+	 * Chooses which copy of the title, caption and alt text this item reads.
+	 *
+	 * Off — the default, and what every gallery gets until somebody says otherwise — the stored
+	 * record wins, so a gallery shows the words Envira froze into it when each image was added.
+	 * On, the media library's current values win and the stored ones become the fallback for
+	 * whatever the library cannot answer: an attachment that has been deleted, or a field left
+	 * blank on one that still exists.
+	 *
+	 * **Nothing here writes.** Turning this on changes which of two existing values is read; the
+	 * stored record is left exactly as it was, which is what makes switching it off again
+	 * lossless rather than a restore.
+	 *
+	 * Set per gallery rather than per item because it is a gallery setting. `Lichtbild_Gallery`
+	 * is the only object holding both the settings and the items, so that is where the two meet.
+	 *
+	 * @param bool $enabled Whether to read the media library first.
+	 *
+	 * @return void
+	 */
+	public function use_live_metadata( $enabled ) {
+		$this->live_metadata = (bool) $enabled;
 	}
 
 	/**
@@ -315,9 +346,22 @@ class Lichtbild_Item {
 	/**
 	 * Returns the item title, preferring Envira's per-gallery override.
 	 *
+	 * With `use_live_metadata()` on, the attachment's current title wins instead — but only
+	 * when it says something. An attachment that has been deleted, or one saved without a
+	 * title, leaves the frozen chain below to answer, so switching the setting on can add a
+	 * label and can change one, and cannot take one away.
+	 *
 	 * @return string Title text.
 	 */
 	public function title() {
+		if ( $this->live_metadata ) {
+			$live = $this->id > 0 ? trim( (string) get_the_title( $this->id ) ) : '';
+
+			if ( '' !== $live ) {
+				return $live;
+			}
+		}
+
 		$title = isset( $this->record['title'] ) ? trim( (string) $this->record['title'] ) : '';
 
 		if ( '' !== $title ) {
@@ -336,9 +380,23 @@ class Lichtbild_Item {
 	 * was. So the allowlist has to be applied here, on the way out of the database, rather
 	 * than relied upon from the escaping that happens later for a different reason.
 	 *
+	 * With `use_live_metadata()` on, the attachment's own excerpt — which is what the media
+	 * library calls the caption — wins when it says something. The allowlist is applied to
+	 * whichever value is chosen, because both come out of the database and both end up in the
+	 * lightbox's `innerHTML`.
+	 *
 	 * @return string Caption text, restricted to post-content markup.
 	 */
 	public function caption() {
+		if ( $this->live_metadata && $this->id > 0 ) {
+			$live = get_post_field( 'post_excerpt', $this->id );
+			$live = is_string( $live ) ? trim( $live ) : '';
+
+			if ( '' !== $live ) {
+				return wp_kses_post( $live );
+			}
+		}
+
 		$caption = isset( $this->record['caption'] ) ? trim( (string) $this->record['caption'] ) : '';
 
 		if ( '' === $caption && $this->id > 0 ) {
@@ -374,9 +432,35 @@ class Lichtbild_Item {
 	/**
 	 * Returns the alt text, falling back to the title so the image is never unlabelled.
 	 *
+	 * With `use_live_metadata()` on, the media library's alt text wins — but only when it says
+	 * something. A value that is empty, or only whitespace, is read as "the library has nothing
+	 * for this image" and the frozen chain below answers instead. So this setting can add an
+	 * accessible name and can change one, and never takes one away.
+	 *
+	 * That reading is a decision, and the renderer is what decides it. The `<img>` is the only
+	 * content of the anchor around it, so an image with an empty alt leaves a link with no
+	 * accessible name at all — a screen reader falls back to announcing the URL. An empty alt is
+	 * how HTML marks a decorative image, and WordPress does record a deliberately-cleared one
+	 * distinguishably (the meta row exists holding `''`), so honouring it here is implementable.
+	 * It is not done because the two ways of being wrong are not the same size: reading a blank
+	 * as decorative silently strips the name off every image on a site whose owner never filled
+	 * the field in, which is the ordinary state of a photograph uploaded years ago, while
+	 * reading it as missing costs an owner who genuinely meant it a label they can clear on the
+	 * gallery's own row instead. A gallery of unnamed links is not a state this setting may
+	 * produce by accident.
+	 *
 	 * @return string Alt text.
 	 */
 	public function alt() {
+		if ( $this->live_metadata && $this->id > 0 ) {
+			$live = get_post_meta( $this->id, '_wp_attachment_image_alt', true );
+			$live = is_string( $live ) ? trim( $live ) : '';
+
+			if ( '' !== $live ) {
+				return $live;
+			}
+		}
+
 		$alt = isset( $this->record['alt'] ) ? trim( (string) $this->record['alt'] ) : '';
 
 		// A literal two-character `""` is read as no alt text as well. It has NOT been observed

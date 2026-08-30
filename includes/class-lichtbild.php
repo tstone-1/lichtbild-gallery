@@ -129,7 +129,7 @@ class Lichtbild {
 		$this->assets           = new Lichtbild_Assets( $this->settings );
 		$this->renderer         = new Lichtbild_Renderer( $this->assets );
 		$this->shortcode        = new Lichtbild_Shortcode( $this->repository, $this->renderer, $this->settings );
-		$this->block            = new Lichtbild_Block( $this->shortcode, $this->repository );
+		$this->block            = new Lichtbild_Block( $this->shortcode, $this->repository, $this->settings );
 		$this->ajax             = new Lichtbild_Ajax( $this->repository, $this->renderer );
 		$this->standalone       = new Lichtbild_Standalone( $this->repository, $this->renderer, $this->settings );
 		$this->migration        = new Lichtbild_Migration( $this->settings );

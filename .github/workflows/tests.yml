@@ -77,6 +77,21 @@ jobs:
         # present. Node is on every runner; this needs nothing else.
         run: node tests/blocks-js-test.js
 
+      - name: Check gallery creation from the block editor
+        # This write path creates the canonical gallery entity before the block stores its id.
+        # It needs its own refusal and cleanup cases; rendering an existing gallery cannot cover it.
+        run: php tests/block-create-test.php
+
+      - name: Check live Media Library metadata
+        # The opt-in direction and the default-off direction are equally important: one keeps
+        # metadata current, while the other keeps every migrated gallery byte-for-byte faithful.
+        run: php tests/live-metadata-test.php
+
+      - name: Check the WordPress Playground preview
+        # The directory launches this file outside the plugin archive. A stale directory slug
+        # or post type still boots WordPress, but lands a prospective user on a broken preview.
+        run: node tests/blueprint-test.js
+
       - name: Check the front-end deep-link pattern
         # Deep links are the only URLs this plugin produces that leave the site — pasted into
         # messages, bookmarked — so one carrying the pre-rename prefix cannot be recalled and
@@ -140,6 +155,11 @@ jobs:
         # A non-zero exit means a mutation SURVIVED, was MISSED by the check that claimed it,
         # BROKE the harness, or made checks VANISH from the report instead of failing.
         run: php tests/mutations.php --fixture=tests/fixture-synthetic.json
+
+      - name: Mutate the new creation and metadata guards
+        # These focused tests use different report formats from render-test.php, so their seven
+        # guard mutations run through the small companion harness built for those paths.
+        run: php tests/feature-mutations.php
 
       - name: Prove the harness restored every file it edited
         # The mutation harness writes to includes/ and restores by bytes, verifying each

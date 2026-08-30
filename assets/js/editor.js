@@ -127,6 +127,14 @@
 
 		$( '#lichtbild-add-images' ).on( 'click', openPicker );
 
+		// The note above the rows says whether what is typed into them will be shown, and that
+		// answer is a checkbox in another metabox on the same form. Bound rather than left to
+		// the next page load, because the gap between ticking the box and seeing the note is
+		// exactly when somebody would otherwise type a caption that is never displayed.
+		$( '#lichtbild-live_metadata' ).on( 'change', function () {
+			$( '#lichtbild-editor-live-note' ).toggle( this.checked );
+		} );
+
 		list.on( 'click', '.lichtbild-editor__remove', function () {
 			$( this ).closest( '.lichtbild-editor__item' ).remove();
 			syncOrder();

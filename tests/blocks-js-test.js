@@ -23,6 +23,21 @@
  * every `wp.*` member it stubs is one the script genuinely uses, so a member added to the mock
  * without the script needing it is dead weight, and one the script starts using without being
  * added here fails loudly rather than quietly.
+ *
+ * WHY `useState` IS MODELLED RATHER THAN FAKED
+ * ============================================
+ *
+ * The create flow is five pieces of component state and the transitions between them, so a
+ * `useState` returning a fixed pair would model a component that cannot change — every check
+ * below would render the same first frame and pass whatever the setters did. The stub here keeps
+ * one slot per call in call order, persists it across renders of the same instance, and accepts
+ * the updater-function form, because `blocks.js` uses it to append to the picker's choices. That
+ * is what makes "the chooser is disabled while a request is in flight" a question this file can
+ * answer at all.
+ *
+ * It is a *model*, not React: nothing re-renders by itself. A check sets state through the
+ * script's own handlers and then re-renders explicitly, which is enough to ask what the next
+ * frame contains and is honest about being a frame rather than a browser.
  */
 
 'use strict';
@@ -32,20 +47,36 @@ const path = require( 'path' );
 const vm = require( 'vm' );
 
 let failures = 0;
+let total = 0;
 
 /**
  * Reports one check.
+ *
+ * The running total is counted rather than written down at the bottom, because a hand-kept count
+ * drifts the moment a check is added and then reports fewer checks than ran — which is the one
+ * number a reader uses to decide whether the file did what it claims.
  *
  * @param {string}  label  What is being asserted.
  * @param {boolean} ok     Whether it holds.
  * @param {string}  detail Context, printed either way.
  */
 function check( label, ok, detail ) {
+	total++;
+
 	console.log( `${ ok ? '[OK]  ' : '[FAIL]' } ${ label.padEnd( 52 ) } ${ detail || '' }` );
 
 	if ( ! ok ) {
 		failures++;
 	}
+}
+
+/**
+ * Prints the summary and ends the run.
+ */
+function done() {
+	console.log( `\nchecks: ${ total }, failing: ${ failures }` );
+
+	process.exit( failures > 0 ? 1 : 0 );
 }
 
 /**
@@ -82,6 +113,121 @@ function flatten( node ) {
 	return node.children.reduce( ( all, child ) => all.concat( flatten( child ) ), [ node ] );
 }
 
+// One slot per `useState` call, in call order, held across renders of one component instance.
+// `mount()` starts a new instance; `frame()` starts a new render of the current one.
+const hooks = { slots: [], cursor: 0 };
+
+/**
+ * Starts a fresh component instance, discarding whatever state the last one held.
+ */
+function mount() {
+	hooks.slots = [];
+	hooks.cursor = 0;
+}
+
+/**
+ * One `useState` slot: the value, and a setter that accepts a value or an updater function.
+ *
+ * @param {*} initial Initial value, or a function producing one.
+ *
+ * @return {Array} The `[ value, setValue ]` pair.
+ */
+function useState( initial ) {
+	const slot = hooks.cursor++;
+
+	if ( ! Object.prototype.hasOwnProperty.call( hooks.slots, slot ) ) {
+		hooks.slots[ slot ] = 'function' === typeof initial ? initial() : initial;
+	}
+
+	return [
+		hooks.slots[ slot ],
+		( next ) => {
+			hooks.slots[ slot ] = 'function' === typeof next ? next( hooks.slots[ slot ] ) : next;
+		}
+	];
+}
+
+// Every request the script made, each with the handles to settle it, so a check decides when the
+// server answers and what it answers with.
+const fetches = [];
+
+/**
+ * Records a request and hands back a promise the check settles itself.
+ *
+ * @param {string} url     Endpoint.
+ * @param {Object} options Request options.
+ *
+ * @return {Promise} A promise held open until a check resolves or rejects it.
+ */
+function fetchStub( url, options ) {
+	let settle = null;
+	const promise = new Promise( ( resolve, reject ) => {
+		settle = { resolve, reject };
+	} );
+
+	fetches.push( { url, options, settle } );
+
+	return promise;
+}
+
+/**
+ * The parts of `FormData` the script uses, keeping order, because order is what carries the
+ * gallery's own item order to the server.
+ */
+class FormDataStub {
+
+	/**
+	 * Starts an empty body.
+	 */
+	constructor() {
+		this.entries = [];
+	}
+
+	/**
+	 * Appends one field.
+	 *
+	 * @param {string} key   Field name.
+	 * @param {string} value Field value.
+	 */
+	append( key, value ) {
+		this.entries.push( [ key, value ] );
+	}
+}
+
+// What the media frame will hand back when a check opens it.
+let selection = [];
+
+/**
+ * Core's media frame, reduced to what the script asks of it.
+ *
+ * @param {Object} args Frame arguments.
+ *
+ * @return {Object} The frame.
+ */
+function mediaStub( args ) {
+	mediaStub.args = args;
+	mediaStub.frame = {
+		opened: 0,
+		handlers: {},
+		on( event, fn ) {
+			this.handlers[ event ] = fn;
+		},
+		open() {
+			this.opened++;
+		},
+		state: () => ( {
+			get: () => ( {
+				each: ( fn ) => selection.forEach( ( id ) => fn( { toJSON: () => ( { id } ) } ) )
+			} )
+		} )
+	};
+
+	return mediaStub.frame;
+}
+
+mediaStub.args = null;
+mediaStub.frame = null;
+
 const wp = {
 	element: {
 		createElement: ( type, props, ...children ) => ( {
@@ -89,7 +235,8 @@ const wp = {
 			type,
 			props: props || {},
 			children: children.flat( Infinity ).filter( ( c ) => null !== c && undefined !== c )
-		} )
+		} ),
+		useState
 	},
 	blocks: {
 		registerBlockType: ( name, settings ) => {
@@ -103,8 +250,13 @@ const wp = {
 	components: {
 		Placeholder: component( 'Placeholder' ),
 		PanelBody: component( 'PanelBody' ),
-		SelectControl: component( 'SelectControl' )
+		SelectControl: component( 'SelectControl' ),
+		TextControl: component( 'TextControl' ),
+		Button: component( 'Button' ),
+		Notice: component( 'Notice' ),
+		ExternalLink: component( 'ExternalLink' )
 	},
+	media: mediaStub,
 	serverSideRender: component( 'ServerSideRender' )
 };
 
@@ -116,6 +268,11 @@ const data = {
 		{ value: 22, label: 'Alps' }
 	],
 	albums: [ { value: 33, label: 'Travel' } ],
+	canCreate: true,
+	createReason: '',
+	createAction: 'lichtbild_create_gallery',
+	createNonce: 'nonce-abc',
+	ajaxUrl: 'https://example.com/wp-admin/admin-ajax.php',
 	i18n: {
 		galleryTitle: 'Lichtbild-Galerie',
 		albumTitle: 'Lichtbild-Album',
@@ -129,14 +286,45 @@ const data = {
 		noGalleries: 'no galleries',
 		noAlbums: 'no albums',
 		emptyGallery: 'empty gallery',
-		emptyAlbum: 'empty album'
+		emptyAlbum: 'empty album',
+		galleryName: 'Galeriename',
+		createGallery: 'Galerie anlegen',
+		chooseExisting: 'oder eine vorhandene',
+		chooseImages: 'Bilder wählen',
+		useImages: 'Zur Galerie hinzufügen',
+		creating: 'wird angelegt…',
+		createFailed: 'generic failure',
+		chooseAtLeastOne: 'choose at least one',
+		mediaUnavailable: 'no media library here',
+		draftNotice: 'this is a draft',
+		editGallery: 'edit this gallery'
 	}
 };
 
-const sandbox = { window: { wp, LichtbildBlocks: data }, console };
-sandbox.global = sandbox;
-
 const source = fs.readFileSync( path.join( __dirname, '..', 'assets', 'js', 'blocks.js' ), 'utf8' );
+
+/**
+ * Runs `blocks.js` in a fresh context and returns the gallery block's `edit`.
+ *
+ * @param {Object} blockData What `Lichtbild_Block::editor_data()` printed.
+ *
+ * @return {Function} The edit component the script registered.
+ */
+function load( blockData ) {
+	const box = {
+		window: { wp, LichtbildBlocks: blockData, fetch: fetchStub, FormData: FormDataStub },
+		console
+	};
+
+	box.global = box;
+
+	vm.runInNewContext( source, box, { filename: 'assets/js/blocks.js' } );
+
+	return registered[ 'lichtbild/gallery' ].edit;
+}
+
+const sandbox = { window: { wp, LichtbildBlocks: data, fetch: fetchStub, FormData: FormDataStub }, console };
+sandbox.global = sandbox;
 
 // A throw here is the whole point, so it is reported as a failing check rather than left to
 // crash the process with a stack trace and no summary line.
@@ -145,8 +333,7 @@ try {
 	check( 'the script runs to completion', true, '' );
 } catch ( error ) {
 	check( 'the script runs to completion', false, String( error ) );
-	console.log( `\nchecks: 1, failing: ${ failures }` );
-	process.exit( 1 );
+	done();
 }
 
 const names = Object.keys( registered ).sort();
@@ -158,8 +345,7 @@ check(
 );
 
 if ( 2 !== names.length ) {
-	console.log( `\nchecks: 2, failing: ${ failures }` );
-	process.exit( 1 );
+	done();
 }
 
 // Dynamic blocks save nothing into the post content but the block comment. A `save` returning
@@ -196,13 +382,13 @@ check(
 
 // --- the three states of the edit component ------------------------------------------------
 //
-// Each is rendered and inspected for what it contains. `edit` is a plain function here because
-// nothing in it uses a hook the mock cannot answer, which is itself worth knowing: the day it
-// does, this file stops running rather than quietly testing less.
+// Each is rendered and inspected for what it contains. Every render below is a fresh instance:
+// `mount()` throws away the previous one's state, so a check cannot pass on a value some earlier
+// check happened to leave in a hook slot.
 const edit = registered[ 'lichtbild/gallery' ].edit;
 
 /**
- * Renders `edit` once and returns every element it produced.
+ * Renders `edit` as a new component instance and returns every element it produced.
  *
  * @param {number} id       Chosen gallery.
  * @param {Object} override Extra props merged into the mocked block props.
@@ -210,7 +396,23 @@ const edit = registered[ 'lichtbild/gallery' ].edit;
  * @return {Object[]} The flattened element tree.
  */
 function render( id, override ) {
+	mount();
+
 	return flatten( edit( Object.assign( { attributes: { id }, setAttributes: () => {} }, override ) ) );
+}
+
+/**
+ * Renders the *same* instance again, so a check can read the frame after a setter ran.
+ *
+ * @param {Function} component The edit component.
+ * @param {Object}   props     Block props.
+ *
+ * @return {Object[]} The flattened element tree.
+ */
+function reRender( component, props ) {
+	hooks.cursor = 0;
+
+	return flatten( component( props ) );
 }
 
 const unchosen = render( 0 );
@@ -259,8 +461,7 @@ check(
 // block.json promises a number, and WordPress would re-serialise the post on every save.
 let written = null;
 
-edit( { attributes: { id: 0 }, setAttributes: ( attrs ) => { written = attrs; } } );
-flatten( edit( { attributes: { id: 0 }, setAttributes: ( attrs ) => { written = attrs; } } ) )
+render( 0, { setAttributes: ( attrs ) => { written = attrs; } } )
 	.find( ( el ) => 'SelectControl' === el.type.displayName )
 	.props.onChange( '22' );
 
@@ -271,15 +472,9 @@ check(
 );
 
 // A site with nothing to pick gets a statement, not an empty dropdown that reads as a bug.
-const emptyEdit = ( () => {
-	const bare = Object.assign( {}, data, { galleries: [] } );
-	const box = { window: { wp, LichtbildBlocks: bare }, console };
-	box.global = box;
+const emptyEdit = load( Object.assign( {}, data, { galleries: [] } ) );
 
-	vm.runInNewContext( source, box, { filename: 'assets/js/blocks.js' } );
-
-	return registered[ 'lichtbild/gallery' ].edit;
-} )();
+mount();
 
 const nothing = flatten( emptyEdit( { attributes: { id: 0 }, setAttributes: () => {} } ) );
 
@@ -305,6 +500,207 @@ try {
 
 check( 'a missing wp is survived, not thrown on', ! threw, threw ? 'it threw' : 'returned quietly' );
 
-console.log( `\nchecks: 12, failing: ${ failures }` );
+// --- the create flow -------------------------------------------------------------------------
+//
+// The checks above ask what one frame contains. These ask what the script *does*: open the media
+// frame, post what was chosen, and read the answer. None of it is reachable from markup — the
+// PHP suite sees the request arrive and never sees what sent it, and `tests/live-block.php` sees
+// the script tag and never sees it run — so a create flow that posted the wrong nonce, dropped
+// the chosen order, or left the form stuck on "Creating…" would pass every other check here.
 
-process.exit( failures > 0 ? 1 : 0 );
+/**
+ * Finds one element by the component it renders.
+ *
+ * @param {Object[]} tree Flattened element tree.
+ * @param {string}   name Component display name.
+ *
+ * @return {Object|undefined} The element, if it is there.
+ */
+function byName( tree, name ) {
+	return tree.find( ( el ) => name === ( el.type && el.type.displayName ) );
+}
+
+/**
+ * Lets every pending promise callback run.
+ *
+ * `setImmediate` is a macrotask, so the whole microtask queue — `response.json()` and the
+ * `.then()` after it — has drained by the time it fires.
+ *
+ * @return {Promise} Resolved after the microtask queue is empty.
+ */
+function flush() {
+	return new Promise( ( resolve ) => setImmediate( resolve ) );
+}
+
+/**
+ * A block whose attributes actually change when the script writes them, so a check can render
+ * the frame that follows an adoption rather than assert on the write alone.
+ *
+ * @return {Object} Props, plus `written`, the last attributes the script stored.
+ */
+function block() {
+	const props = { attributes: { id: 0 }, written: null };
+
+	props.setAttributes = ( attrs ) => {
+		props.written = attrs;
+		Object.assign( props.attributes, attrs );
+	};
+
+	return props;
+}
+
+const createEdit = load( data );
+
+( async () => {
+	// A throw in here would otherwise surface as an unhandled rejection: a stack trace, no
+	// summary line, and an exit code that says failure without saying how many checks ran. Same
+	// reason the script's own run is wrapped above.
+	try {
+		await createFlow();
+	} catch ( error ) {
+		check( 'the create flow runs to completion', false, String( error ) );
+	}
+
+	done();
+} )();
+
+/**
+ * Drives the create flow, from an empty block to an adopted gallery and back to a refusal.
+ */
+async function createFlow() {
+	// One instance for the whole happy path, because the flow *is* the state carried across
+	// renders: the name typed in the first frame has to reach the request made from the third.
+	mount();
+
+	const props = block();
+	let tree = reRender( createEdit, props );
+
+	byName( tree, 'TextControl' ).props.onChange( 'Alpen' );
+
+	tree = reRender( createEdit, props );
+	selection = [ 501, 502 ];
+
+	byName( tree, 'Button' ).props.onClick();
+
+	check(
+		'the create button opens the media frame, images only',
+		!! mediaStub.frame &&
+			1 === mediaStub.frame.opened &&
+			'image' === mediaStub.args.library.type &&
+			'add' === mediaStub.args.multiple &&
+			'function' === typeof mediaStub.frame.handlers.select,
+		`opened ${ mediaStub.frame ? mediaStub.frame.opened : 0 } time(s), library ` +
+			JSON.stringify( mediaStub.args && mediaStub.args.library )
+	);
+
+	mediaStub.frame.handlers.select();
+
+	// The order of `images[]` is the gallery's own item order, and it is the one thing in this
+	// request the server cannot reconstruct. The nonce and the action are asserted with it
+	// because a request carrying the wrong one of either is refused with a message about
+	// permissions, which reads as a broken site rather than a broken request.
+	const sent = fetches[ 0 ];
+
+	check(
+		'the chosen images are posted, in order, with the nonce',
+		1 === fetches.length &&
+			data.ajaxUrl === sent.url &&
+			'POST' === sent.options.method &&
+			'same-origin' === sent.options.credentials &&
+			JSON.stringify( sent.options.body.entries ) ===
+				JSON.stringify( [
+					[ 'action', 'lichtbild_create_gallery' ],
+					[ 'nonce', 'nonce-abc' ],
+					[ 'title', 'Alpen' ],
+					[ 'images[]', '501' ],
+					[ 'images[]', '502' ]
+				] ),
+		`${ fetches.length } request(s): ` + JSON.stringify( sent && sent.options.body.entries )
+	);
+
+	tree = reRender( createEdit, props );
+
+	// The window in which two writers can disagree about what this block points at. The response
+	// ends by writing its own id into the block, so a chooser left live during the request lets
+	// someone select a different gallery and have it silently overwritten a second later.
+	check(
+		'the chooser is disabled while the request is in flight',
+		true === byName( tree, 'SelectControl' ).props.disabled,
+		`disabled: ${ JSON.stringify( byName( tree, 'SelectControl' ).props.disabled ) }`
+	);
+
+	sent.settle.resolve( {
+		json: () =>
+			Promise.resolve( {
+				success: true,
+				data: { id: 77, title: 'Alpen', editUrl: 'https://example.com/wp-admin/post.php?post=77' }
+			} )
+	} );
+
+	await flush();
+
+	tree = reRender( createEdit, props );
+
+	const options = byName( tree, 'SelectControl' ).props.options;
+
+	check(
+		'the new gallery is adopted as a number, listed, and the form freed',
+		null !== props.written &&
+			77 === props.written.id &&
+			'number' === typeof props.written.id &&
+			4 === options.length &&
+			77 === options[ 3 ].value &&
+			false === byName( tree, 'SelectControl' ).props.disabled,
+		`wrote ${ JSON.stringify( props.written ) }, ${ options.length } options`
+	);
+
+	// A draft is invisible to visitors and renders perfectly for the author looking at it, so the
+	// only thing that says so is this notice.
+	const draft = byName( tree, 'Notice' );
+
+	check(
+		'a freshly made draft says it is one, and links to itself',
+		!! draft &&
+			'warning' === draft.props.status &&
+			draft.children.includes( 'this is a draft' ) &&
+			!! byName( tree, 'ExternalLink' ),
+		`notice: ${ draft ? draft.props.status : '(none)' }`
+	);
+
+	// --- the same flow, refused ---------------------------------------------------------------
+	//
+	// A fresh instance, because this asks what happens to a form that has never succeeded.
+	mount();
+	fetches.length = 0;
+	selection = [ 501 ];
+
+	const refusedProps = block();
+	let refused = reRender( createEdit, refusedProps );
+
+	byName( refused, 'Button' ).props.onClick();
+	mediaStub.frame.handlers.select();
+
+	fetches[ 0 ].settle.resolve( {
+		json: () => Promise.resolve( { success: false, data: { message: 'Run the migration first.' } } )
+	} );
+
+	await flush();
+
+	refused = reRender( createEdit, refusedProps );
+
+	const complaint = byName( refused, 'Notice' );
+
+	// The server's own message, not this file's generic one: a refusal here says what to do —
+	// run the migration, ask for permission — and "The gallery could not be created" says only
+	// that something went wrong. And the form has to come back, or the editor is stuck on
+	// "Creating…" with no way to try again.
+	check(
+		'a refusal shows the server reason and frees the form',
+		null === refusedProps.written &&
+			!! complaint &&
+			'error' === complaint.props.status &&
+			complaint.children.includes( 'Run the migration first.' ) &&
+			false === byName( refused, 'SelectControl' ).props.disabled,
+		`notice: ${ complaint ? JSON.stringify( complaint.children ) : '(none)' }`
+	);
+}

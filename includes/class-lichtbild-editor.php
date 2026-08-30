@@ -209,6 +209,20 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 		echo '<span class="description">' .
 			esc_html__( 'Drag to reorder. Titles, captions and alt text are stored on the gallery; tags are stored on the image itself and are shared by every gallery it appears in.', 'lichtbild-gallery' ) .
 			'</span>';
+
+		// Printed always and hidden when it does not apply, rather than printed conditionally,
+		// so the editor's script can show it the moment the box is ticked instead of after a
+		// save. The state it reflects is the one on screen, which is what the person typing
+		// into these fields needs to know.
+		//
+		// It says "only where the Media Library is empty" rather than "not shown", because that
+		// is what the reader does: a blank title, caption or alt text there falls back to the
+		// row below. A note claiming the rows are dead would be wrong for exactly the images
+		// whose row is still doing the work.
+		echo ' <span class="description" id="lichtbild-editor-live-note"' .
+			( empty( $record['settings']['live_metadata'] ) ? ' style="display:none"' : '' ) . '>' .
+			esc_html__( 'This gallery takes titles, captions and alt text from the Media Library. What you type below is saved either way, and shown only where the Media Library field is empty.', 'lichtbild-gallery' ) .
+			'</span>';
 		echo '</p>';
 
 		echo '<ul class="lichtbild-editor__items" id="lichtbild-editor-items">';
@@ -438,6 +452,19 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 			)
 		);
 
+		// Stated as a consequence rather than as a feature, because the consequence is what an
+		// owner has to weigh: one place to fix a typo, against a caption that changes on a page
+		// they were not editing. The last sentence answers the question the wording otherwise
+		// invites — nothing about this writes to the media library, in either position.
+		$this->row_flags(
+			$settings,
+			__( 'Image metadata', 'lichtbild-gallery' ),
+			array(
+				'live_metadata' => __( 'Take titles, captions and alt text from the Media Library', 'lichtbild-gallery' ),
+			),
+			__( 'Off, this gallery shows the title, caption and alt text saved on its own rows below. On, it shows what the Media Library holds for each image today — so editing an image there changes it in every gallery at once. A field the Media Library leaves empty falls back to the row below, which is why alt text never disappears when you switch this on. Lichtbild never writes to the Media Library either way.', 'lichtbild-gallery' )
+		);
+
 		$this->row_flags(
 			$settings,
 			__( 'Behaviour', 'lichtbild-gallery' ),
@@ -634,21 +661,33 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 	/**
 	 * Renders a group of checkboxes, each its own boolean setting.
 	 *
-	 * @param array                $settings Current settings.
-	 * @param string               $label    Row label.
-	 * @param array<string,string> $flags    Labels keyed by setting name.
+	 * The id is emitted for the same reason the single-value rows emit one: it is the only
+	 * handle the editor's script has on a box whose state changes what the rest of the screen
+	 * means. The `<label>` wraps its input, so nothing here depends on it for labelling.
+	 *
+	 * @param array                $settings    Current settings.
+	 * @param string               $label       Row label.
+	 * @param array<string,string> $flags       Labels keyed by setting name.
+	 * @param string               $description Help text printed under the group.
 	 *
 	 * @return void
 	 */
-	private function row_flags( array $settings, $label, array $flags ) {
+	private function row_flags( array $settings, $label, array $flags, $description = '' ) {
 		echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td><fieldset>';
 
 		foreach ( $flags as $key => $text ) {
-			echo '<label><input type="checkbox" name="lichtbild_settings[' . esc_attr( $key ) . ']" value="1"' .
+			echo '<label><input type="checkbox" id="lichtbild-' . esc_attr( $key ) . '"' .
+				' name="lichtbild_settings[' . esc_attr( $key ) . ']" value="1"' .
 				checked( ! empty( $settings[ $key ] ), true, false ) . ' /> ' . esc_html( $text ) . '</label><br />';
 		}
 
-		echo '</fieldset></td></tr>';
+		echo '</fieldset>';
+
+		if ( '' !== $description ) {
+			echo '<p class="description">' . esc_html( $description ) . '</p>';
+		}
+
+		echo '</td></tr>';
 	}
 
 	/**

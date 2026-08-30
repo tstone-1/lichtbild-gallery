@@ -17,6 +17,7 @@
 
 function out( $label, $ok, $detail = '' ) {
 	printf( "%-8s %-46s %s\n", $ok ? '[OK]' : '[FAIL]', $label, $detail );
+	$GLOBALS['lichtbild_live_checked'] = ( isset( $GLOBALS['lichtbild_live_checked'] ) ? $GLOBALS['lichtbild_live_checked'] : 0 ) + 1;
 
 	if ( ! $ok ) {
 		$GLOBALS['lichtbild_live_failed'] = ( isset( $GLOBALS['lichtbild_live_failed'] ) ? $GLOBALS['lichtbild_live_failed'] : 0 ) + 1;
@@ -39,6 +40,20 @@ if ( $settings->has_migrated() ) {
 
 	exit( 1 );
 }
+
+// WP-CLI starts eval-file with no logged-in user. The picker deliberately asks `read_post` for
+// every choice, so an anonymous run offers nothing and makes a correct capability boundary look
+// like a broken query. Select a real administrator here rather than requiring an invocation flag
+// whose omission produces three unrelated-looking failures later in the report.
+$administrators = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ids' ) );
+
+if ( empty( $administrators ) ) {
+	echo "[ERROR] the snapshot has no administrator for the block-editor capability checks.\n";
+
+	exit( 1 );
+}
+
+wp_set_current_user( (int) $administrators[0] );
 
 // ---------------------------------------------------------------- migrate
 $migration = new Lichtbild_Migration( $settings );
@@ -68,7 +83,7 @@ $repository = new Lichtbild_Repository(
 
 $renderer  = new Lichtbild_Renderer( new Lichtbild_Assets( $settings ) );
 $shortcode = new Lichtbild_Shortcode( $repository, $renderer, $settings );
-$block     = new Lichtbild_Block( $shortcode, $repository );
+$block     = new Lichtbild_Block( $shortcode, $repository, $settings );
 
 // ---------------------------------------------------------------- registration
 // `register_block_type()` is given a directory, so real WordPress reads the metadata, applies
@@ -227,35 +242,35 @@ out(
 // ---------------------------------------------------------------- visibility, through core
 // The gate that matters, asserted against real `post_password_required()` rather than a stub:
 // a protected gallery placed in a block by an author renders nothing to a logged-out visitor.
-$protected = 0;
+// The production snapshot currently has no password-protected gallery, so searching for one is
+// an assertion that can never pass. Protect the known renderable gallery for this check and put
+// its original password back before reporting the result.
+$target_post       = get_post( $target );
+$original_password = $target_post instanceof WP_Post ? (string) $target_post->post_password : '';
+$was_user          = wp_get_current_user()->ID;
+$protected_update  = wp_update_post( array( 'ID' => $target, 'post_password' => 'lichtbild-live-block-control' ), true );
 
-foreach ( $choices as $candidate => $unused_title ) {
-	$post = get_post( (int) $candidate );
+clean_post_cache( $target );
+wp_set_current_user( 0 );
 
-	if ( $post instanceof WP_Post && '' !== (string) $post->post_password ) {
-		$protected = (int) $candidate;
+$locked = do_blocks( '<!-- wp:lichtbild/gallery {"id":' . $target . '} /-->' );
 
-		break;
-	}
-}
+wp_set_current_user( $was_user );
+wp_update_post( array( 'ID' => $target, 'post_password' => $original_password ) );
+clean_post_cache( $target );
 
-if ( $protected > 0 ) {
-	$was = wp_get_current_user()->ID;
-	wp_set_current_user( 0 );
+$open     = do_blocks( '<!-- wp:lichtbild/gallery {"id":' . $target . '} /-->' );
+$restored = get_post( $target );
 
-	$locked = do_blocks( '<!-- wp:lichtbild/gallery {"id":' . $protected . '} /-->' );
-	$open   = do_blocks( '<!-- wp:lichtbild/gallery {"id":' . $target . '} /-->' );
-
-	wp_set_current_user( $was );
-
-	out(
-		'a protected gallery renders nothing through the block',
-		'' === trim( $locked ) && '' !== trim( $open ),
-		sprintf( 'protected %d bytes, control %d bytes', strlen( trim( $locked ) ), strlen( trim( $open ) ) )
-	);
-} else {
-	out( 'a protected gallery renders nothing through the block', false, 'no protected gallery in the database; this leg proved nothing' );
-}
+out(
+	'a protected gallery renders nothing through the block',
+	! is_wp_error( $protected_update )
+		&& '' === trim( $locked )
+		&& '' !== trim( $open )
+		&& $restored instanceof WP_Post
+		&& $original_password === (string) $restored->post_password,
+	sprintf( 'protected %d bytes, control %d bytes; password restored: %s', strlen( trim( $locked ) ), strlen( trim( $open ) ), $restored instanceof WP_Post && $original_password === (string) $restored->post_password ? 'yes' : 'NO' )
+);
 
 // ---------------------------------------------------------------- roll back
 $rolled = $migration->rollback();
@@ -267,7 +282,8 @@ out(
 );
 
 $failed = isset( $GLOBALS['lichtbild_live_failed'] ) ? $GLOBALS['lichtbild_live_failed'] : 0;
+$checked = isset( $GLOBALS['lichtbild_live_checked'] ) ? $GLOBALS['lichtbild_live_checked'] : 0;
 
-printf( "\nchecks: 11, failing: %d\n", $failed );
+printf( "\nchecks: %d, failing: %d\n", $checked, $failed );
 
 exit( $failed > 0 ? 1 : 0 );

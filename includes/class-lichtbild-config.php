@@ -48,6 +48,11 @@ class Lichtbild_Config {
 	 * The element ids are stable and documented for exactly that purpose: a gallery is
 	 * `#lichtbild-<id>` and its wrapper `#lichtbild-<id>-wrap`.
 	 *
+	 * `live_metadata` defaults to false for the same reason every other default matches
+	 * Envira's: a gallery that shows the words Envira froze into it has to keep showing them
+	 * until its owner says otherwise. It is the one setting whose default decides whether a
+	 * migration is faithful, so it is off and it is opt-in per gallery.
+	 *
 	 * @return array Normalised settings.
 	 */
 	public static function defaults() {
@@ -59,6 +64,7 @@ class Lichtbild_Config {
 			'image_size'          => 'medium_large',
 			'lightbox_size'       => 'large',
 			'title_display'       => 'none',
+			'live_metadata'       => false,
 			'lazy_loading'        => true,
 			'pagination'          => false,
 			'per_page'            => 0,
@@ -171,6 +177,13 @@ class Lichtbild_Config {
 		$settings['tags_all_enabled'] = self::flag( $envira, 'tags_all_enabled', true );
 		$settings['tags_all_label']   = trim( (string) self::get( $envira, 'tags_all', '' ) );
 
+		// `live_metadata` is deliberately NOT derived from anything Envira stores, and there is
+		// nothing it could be derived from: Envira freezes an item's title, caption and alt into
+		// its own record when the image is added and has no notion of reading them back from the
+		// media library afterwards. So a converted gallery takes the default of false, which is
+		// what keeps the migration faithful — the words on the page do not move because the
+		// storage did. Turning it on is a choice made per gallery on the edit screen.
+
 		// Envira's `custom_css` is deliberately NOT converted. See the note on `defaults()`:
 		// the plugin no longer has a setting to convert it into, and a conversion whose result
 		// nothing reads is worse than no conversion at all. Envira's own record still holds it,
@@ -258,6 +271,7 @@ class Lichtbild_Config {
 		// Absent means unchecked. See the docblock: this is the one place where that is the
 		// right reading, and it is the opposite of what `fill()` does.
 		foreach ( array(
+			'live_metadata',
 			'lazy_loading',
 			'pagination',
 			'pagination_scroll',

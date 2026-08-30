@@ -17,5 +17,5 @@
   <rect x="737.1" y="164.0" width="69.6" height="58" rx="5" fill="#14141A" opacity="0.52"/>
   <text x="56" y="128" font-family="Didot, Georgia, serif" font-size="62" fill="#14141A">Lichtbild</text>
   <text x="59" y="166" font-family="Avenir Next, Helvetica Neue, sans-serif" font-size="20" font-weight="600" letter-spacing="7.5" fill="#B87A1E">GALLERY</text>
-  <text x="59" y="200" font-family="Avenir Next, Helvetica Neue, sans-serif" font-size="15" fill="#6E6E7A">Justified photo galleries. Pure CSS, no reflow.</text>
+  <text x="59" y="200" font-family="Avenir Next, Helvetica Neue, sans-serif" font-size="15" fill="#6E6E7A">Photo galleries that look right and load fast.</text>
 </svg>

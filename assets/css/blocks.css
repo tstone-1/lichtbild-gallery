@@ -29,3 +29,61 @@
 .lichtbild-block-preview .lichtbild-tags {
 	opacity: 0.65;
 }
+
+/**
+ * The placeholder's two ways in.
+ *
+ * `Placeholder` lays its children out in a row by default, which puts the name field beside
+ * the button and the dropdown beside both. These blocks are two separate offers — make one, or
+ * place one that exists — so each is a block of its own on a full-width column, and the
+ * dropdown sits under a line of text that says it is the alternative.
+ */
+.lichtbild-block-create,
+.lichtbild-block-choose {
+	flex-basis: 100%;
+	width: 100%;
+}
+
+.lichtbild-block-create {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.lichtbild-block-create .components-base-control {
+	flex: 1 1 12rem;
+	margin-bottom: 0;
+}
+
+/* A separator rather than a heading: a heading here would land inside the Placeholder's own
+   labelled region and read to a screen reader as a section of the post. */
+.lichtbild-block-choose {
+	border-top: 1px solid #ddd;
+	margin-top: 12px;
+	padding-top: 12px;
+}
+
+.lichtbild-block-or {
+	margin: 0 0 4px;
+	font-weight: 600;
+}
+
+.lichtbild-block-none,
+.lichtbild-block-reason {
+	flex-basis: 100%;
+	margin: 0;
+}
+
+/* Full width for the same reason, and above whatever it is talking about rather than beside
+   it — an error that appears next to the control that failed is easy to miss. */
+.lichtbild-block-notice.components-notice {
+	flex-basis: 100%;
+	width: 100%;
+	margin: 0 0 12px;
+	box-sizing: border-box;
+}
+
+.lichtbild-block-edit-link {
+	margin-left: 8px;
+}

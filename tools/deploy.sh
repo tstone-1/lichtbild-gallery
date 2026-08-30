@@ -143,8 +143,35 @@ CHUNK=8192
 # deliberately stay that way: none is read at runtime, none has ever been deployed, and each is
 # one more transfer that can fail for no behavioural gain. LICENSE ships in the wordpress.org
 # ZIP, which is a different artifact.
+# 26.8.27 has two constructor/method edges and both are asserted here rather than left to the
+# alphabetical audit output. `Lichtbild_Gallery` calls the new `use_live_metadata()` method, so
+# Item lands before Gallery. The Block constructor gains a third required argument, which makes
+# its order the mirror of the usual definition-before-caller rule: the container lands first.
+# PHP accepts its third argument while the deployed two-argument constructor is still present;
+# putting Block first would make the deployed container call a three-argument constructor with
+# only two and fatal every request. Config precedes the editor and gallery code that reads its
+# new setting. The new Block PHP precedes its JavaScript, so an editor can see the old interface
+# over the new endpoint but never the new interface over an endpoint that does not exist.
+#
+# The bootstrap remains last because it changes `LICHTBILD_VERSION`, which releases every new
+# asset URL from cache only after all five assets have landed and been digest-verified.
 UPLOAD_ORDER=(
+	"includes/class-lichtbild.php"
+	"includes/class-lichtbild-block.php"
+	"includes/class-lichtbild-config.php"
+	"includes/class-lichtbild-item.php"
+	"includes/class-lichtbild-gallery.php"
+	"includes/class-lichtbild-editor.php"
+	"includes/class-lichtbild-migration.php"
+	"includes/class-lichtbild-settings.php"
+	"blocks/gallery/block.json"
+	"assets/css/blocks.css"
+	"assets/css/lichtbild.css"
+	"assets/js/blocks.js"
+	"assets/js/editor.js"
+	"assets/js/lichtbild.js"
 	"readme.txt"
+	"languages/lichtbild-gallery-de_DE.mo"
 	"lichtbild-gallery.php"
 )
 

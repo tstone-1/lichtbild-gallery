@@ -2,37 +2,61 @@
 Contributors: tstone1
 Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 26.8.26
+Stable tag: 26.8.27
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Fast, responsive photo galleries with a pure-CSS justified grid, a lazy-loaded lightbox, and per-image tag filtering.
+Photo galleries that look composed and load quickly. Free, with no account, no tracking and nothing held back for a paid tier.
 
 == Description ==
 
-Lichtbild renders photo galleries as a justified grid whose geometry is settled in CSS before the
-images arrive, so nothing reflows as the page loads. The lightbox is imported on first click,
-which means a page full of galleries costs no JavaScript until somebody opens an image.
+Lichtbild lays your photographs out in even rows that fill the width of the page. Nothing is
+cropped to a square and no row ends ragged, so a set of mixed portrait and landscape shots reads
+as one composition rather than a grid fighting its contents. Click any photograph and it opens
+full screen, with the next and previous one a swipe or an arrow key away.
 
-= What it does =
+Making a gallery takes one screen. Add images from your media library, drag them into the order
+you want, and edit each one's title, caption and alt text in the same place. Then put the gallery
+into a post with the block, or paste a shortcode.
 
-* **A justified grid that needs no JavaScript.** Every item is sized and grown in proportion to
-  its own aspect ratio, so a row settles at one shared height with no measuring and no layout
-  pass after loading. Fixed-column layouts are supported too.
-* **Grid images are WordPress derivatives with a `srcset`**, not the full-size original.
-* **PhotoSwipe 5, dynamically imported on first click.** Assets are enqueued only once a gallery
-  has actually rendered, never site-wide.
-* **Per-image tags, filtered server-side.** The filter spans the whole gallery rather than the
-  page currently rendered, so a tag that matches nothing on page one still works.
-* **Pagination** with AJAX, with a lightbox that can span every page.
-* **EXIF display**, read from the metadata WordPress already parsed at upload rather than by
-  re-reading the file on every request.
-* **Deep links** that name the image rather than its position, so a shared link opens the same
-  photograph regardless of the filter or page the recipient lands on.
-* **Blocks** for galleries and albums, plus shortcodes.
-* Intrinsic `width`/`height` on every image, so nothing shifts as the page loads.
+It is quick on the visitor's side because of what it does not send: photographs are served at the
+size the page actually shows rather than at full resolution, and the full-screen viewer is
+downloaded only when somebody opens an image, so a page of galleries that nobody clicks costs no
+JavaScript at all.
+
+Everything is included. There is no pro version, no upgrade prompt, no licence key and no account
+to create. The plugin makes no requests to any server other than your own, so nothing about your
+site, your visitors or your photographs is sent anywhere.
+
+If you are moving from Envira Gallery, Lichtbild reads your existing galleries where they are, so
+you can compare the two by switching a plugin on and off. The migration that follows keeps every
+URL and shortcode working and can be undone from the same screen.
+
+= What you get =
+
+* **Even rows that fill the page.** Every photograph keeps its own proportions and the row settles
+  at a shared height. Fixed columns are available if you prefer them.
+* **Images sized for the page.** The grid uses WordPress's own smaller versions with a `srcset`,
+  not the full-size original, so a page of thumbnails is a fraction of the weight.
+* **A full-screen viewer** with swipe, arrow keys and zoom, loaded on the first click rather than
+  on every page.
+* **Filter by tag.** Tags belong to the photograph, so one applied in a gallery follows that image
+  everywhere it appears. The filter searches the whole gallery, not only the page on screen.
+* **Pagination**, with the full-screen viewer still able to run through every page.
+* **Camera settings under the photograph** — camera, aperture, shutter speed, focal length, ISO
+  and capture time — taken from what WordPress already read when the image was uploaded. You
+  choose which of them to show, gallery by gallery.
+* **Links to a single photograph.** A shared link opens the image it names, whatever page or
+  filter the person following it lands on.
+* **Albums**, which collect galleries behind a cover image and get their own page.
+* **Blocks for galleries and albums**, plus shortcodes for classic editors and page builders.
+* **Per-gallery options** for share buttons, a download link, right-click protection, row height
+  and spacing, which image size to use, and whether titles sit under each photograph, over it, or
+  nowhere.
+* **No jumping as the page loads.** Every image carries its dimensions, so the layout is settled
+  before the photographs arrive.
 
 = Migrating from Envira Gallery =
 
@@ -52,15 +76,33 @@ moves. Both are overridable through the `lichtbild_url_slugs` filter.
 
 == Installation ==
 
-1. Upload the plugin to `wp-content/plugins/lichtbild-gallery` and activate it.
-2. Galleries appear under **Lichtbild** in the admin menu. Create one, add images, and drag to
-   order them.
-3. Embed it with the **Lichtbild Gallery** block, or with `[lichtbild-gallery id="123"]`.
+1. In **Plugins → Add New**, search for *Lichtbild Gallery*, install it and activate it. Or
+   upload the plugin folder to `wp-content/plugins/lichtbild-gallery` and activate it there.
+2. Galleries appear under **Lichtbild** in the admin menu. Create one, add images from your
+   media library, and drag them into order.
+3. Put it in a post with the **Lichtbild Gallery** block, or with `[lichtbild-gallery id="123"]`
+   in the classic editor.
 
 If Envira Gallery is installed, Lichtbild stays out of its way: the takeover setting under
 **Settings → Lichtbild** defaults to handling `[envira-gallery]` only while Envira is inactive.
 
 == Frequently Asked Questions ==
+
+= Is any of it paid, and does it need an account? =
+
+No. Every feature described here is in this plugin. There is no pro version, no licence key, no
+sign-up and no upgrade prompt.
+
+= Does it send anything anywhere? =
+
+No. The plugin talks only to your own site. It contacts no external service, loads no fonts or
+scripts from anywhere else, and collects nothing about your visitors.
+
+= Can I try it without installing it? =
+
+Yes. [Open the live demo](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/tstone-1/lichtbild-gallery/main/.wordpress-org/blueprints/blueprint.json)
+to run a throwaway WordPress in your browser with the plugin already installed. Nothing touches
+your own site. The media library starts empty, so upload a few photographs of your own.
 
 = Does it need a page builder or a build step? =
 
@@ -89,14 +131,21 @@ than only in one gallery.
 
 == Screenshots ==
 
-1. A justified grid. Every row settles at one height with no JavaScript and no layout pass after
-   the images load.
-2. Per-image tags, filtered server-side. The filter lists every tag in the gallery, not only the
-   ones on the page currently shown.
-3. The gallery editor: drag to reorder, with title, caption, alt text and tags per image.
-4. The lightbox, showing the EXIF WordPress already parsed at upload.
+1. Portrait and landscape photographs in even rows. Nothing is cropped to a square and no row
+   ends ragged.
+2. Filtering by tag. The buttons cover every tag in the gallery, including ones whose
+   photographs are on a later page, and this gallery has a lot of them.
+3. The full-screen viewer, with the camera settings WordPress read when the image was uploaded.
 
 == Changelog ==
+
+= 26.8.27 =
+* Galleries can be created directly from the Gallery block by choosing images from the Media
+  Library. The block stores the new gallery's ID, so it remains reusable and editable elsewhere.
+* A per-gallery option can take current titles, captions and alt text from the Media Library,
+  while keeping the gallery's own values as fallbacks.
+* Fixed-column galleries use fewer columns on narrow screens, and the plugin listing now offers
+  a no-install live demo.
 
 = 26.8.26 =
 * Fixed: on a new installation, gallery, album and tag permalinks returned 404 until the

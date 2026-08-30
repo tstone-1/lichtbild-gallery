@@ -30,7 +30,7 @@ GREY  = '#6E6E7A'
 
 FONT    = 'Avenir Next, Helvetica Neue, sans-serif'
 SERIF   = 'Didot, Georgia, serif'
-TAGLINE = 'Justified photo galleries. Pure CSS, no reflow.'
+TAGLINE = 'Photo galleries that look right and load fast.'
 
 EDGE = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

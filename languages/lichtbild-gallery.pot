@@ -2,21 +2,21 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Lichtbild Gallery 26.8.25\n"
+"Project-Id-Version: Lichtbild Gallery 26.8.26\n"
 "Report-Msgid-Bugs-To: https://github.com/tstone-1/lichtbild-gallery/issues\n"
 "Last-Translator: tstone-1\n"
 "Language-Team: tstone-1\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-08-22T14:19:55+00:00\n"
+"POT-Creation-Date: 2026-08-30T09:06:20+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: lichtbild-gallery\n"
 
 #. Plugin Name of the plugin
 #: lichtbild-gallery.php
-#: includes/class-lichtbild-block.php:208
+#: includes/class-lichtbild-block.php:542
 msgid "Lichtbild Gallery"
 msgstr ""
 
@@ -54,7 +54,7 @@ msgstr ""
 #: includes/class-lichtbild-album-editor.php:110
 #: includes/class-lichtbild-album-editor.php:722
 #: includes/class-lichtbild-editor.php:143
-#: includes/class-lichtbild-editor.php:878
+#: includes/class-lichtbild-editor.php:957
 msgid "Shortcode"
 msgstr ""
 
@@ -103,15 +103,15 @@ msgstr ""
 
 #: includes/class-lichtbild-album-editor.php:304
 #: includes/class-lichtbild-album-editor.php:412
-#: includes/class-lichtbild-editor.php:247
-#: includes/class-lichtbild-editor.php:309
+#: includes/class-lichtbild-editor.php:301
+#: includes/class-lichtbild-editor.php:363
 msgid "Caption"
 msgstr ""
 
 #: includes/class-lichtbild-album-editor.php:311
 #: includes/class-lichtbild-album-editor.php:416
-#: includes/class-lichtbild-editor.php:280
-#: includes/class-lichtbild-editor.php:317
+#: includes/class-lichtbild-editor.php:334
+#: includes/class-lichtbild-editor.php:371
 msgid "Remove"
 msgstr ""
 
@@ -128,7 +128,7 @@ msgid "Image %d"
 msgstr ""
 
 #: includes/class-lichtbild-album-editor.php:444
-#: includes/class-lichtbild-editor.php:383
+#: includes/class-lichtbild-editor.php:437
 msgid "Columns"
 msgstr ""
 
@@ -149,7 +149,7 @@ msgid "Show how many images it holds"
 msgstr ""
 
 #: includes/class-lichtbild-album-editor.php:474
-#: includes/class-lichtbild-editor.php:649
+#: includes/class-lichtbild-editor.php:728
 msgid "Paste this into a post or page:"
 msgstr ""
 
@@ -205,58 +205,133 @@ msgstr ""
 msgid "This page could not be loaded."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:209
+#: includes/class-lichtbild-block.php:242
+msgid "One or more of the chosen images is not an image on this site, or is not yours to use."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:251
+#: includes/class-lichtbild-block.php:563
+msgid "Choose at least one image."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:275
+#: includes/class-lichtbild-block.php:316
+msgid "The gallery could not be saved. Please try again."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:368
+msgid "Untitled gallery"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:462
+msgid "Galleries can be created here once this site is on Lichtbild storage. Run the migration under Settings > Lichtbild."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:468
+msgid "Galleries cannot be created right now."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:474
+msgid "You do not have permission to create galleries."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:543
 msgid "Lichtbild Album"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:210
+#: includes/class-lichtbild-block.php:544
 msgid "Choose a gallery"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:211
+#: includes/class-lichtbild-block.php:545
 msgid "Choose an album"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:212
+#: includes/class-lichtbild-block.php:546
 msgid "Pick one of the galleries on this site. Edit its images and settings on the gallery itself, not here."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:213
+#: includes/class-lichtbild-block.php:547
+msgid "Make a new gallery from images in your media library, or place one that already exists."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:548
 msgid "Pick one of the albums on this site. Edit its galleries and settings on the album itself, not here."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:214
+#: includes/class-lichtbild-block.php:549
 #: includes/class-lichtbild-post-types.php:209
 msgid "Gallery"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:215
+#: includes/class-lichtbild-block.php:550
 #: includes/class-lichtbild-post-types.php:253
 msgid "Album"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:216
+#: includes/class-lichtbild-block.php:551
 msgid "— Select —"
 msgstr ""
 
-#: includes/class-lichtbild-block.php:217
+#: includes/class-lichtbild-block.php:552
 msgid "This site has no galleries yet."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:218
+#: includes/class-lichtbild-block.php:553
 msgid "This site has no albums yet."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:219
+#: includes/class-lichtbild-block.php:554
 msgid "This gallery has nothing to show. It may be empty, a draft, or password-protected."
 msgstr ""
 
-#: includes/class-lichtbild-block.php:220
+#: includes/class-lichtbild-block.php:555
 msgid "This album has nothing to show. It may be empty, a draft, or password-protected."
 msgstr ""
 
+#: includes/class-lichtbild-block.php:556
+msgid "Gallery name"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:557
+msgid "Create a gallery"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:558
+msgid "Or choose an existing gallery"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:559
+msgid "Choose images for this gallery"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:560
+#: includes/class-lichtbild-editor.php:939
+msgid "Add to gallery"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:561
+msgid "Creating the gallery…"
+msgstr ""
+
+#: includes/class-lichtbild-block.php:562
+msgid "The gallery could not be created. Please try again."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:564
+msgid "The media library is not available on this screen, so the gallery has to be made from the Lichtbild menu."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:565
+msgid "This gallery is a draft, so visitors will not see it until you publish it."
+msgstr ""
+
+#: includes/class-lichtbild-block.php:566
+msgid "Edit this gallery"
+msgstr ""
+
 #: includes/class-lichtbild-editor.php:125
-#: includes/class-lichtbild-editor.php:877
+#: includes/class-lichtbild-editor.php:956
 msgid "Images"
 msgstr ""
 
@@ -272,271 +347,283 @@ msgstr ""
 msgid "Lichtbild reads that format but never writes to it, so that switching between the two plugins stays lossless. Migrate the galleries to Lichtbild's own storage to edit them here."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:202
+#: includes/class-lichtbild-editor.php:208
 msgid "Add Images"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:204
+#: includes/class-lichtbild-editor.php:210
 msgid "Drag to reorder. Titles, captions and alt text are stored on the gallery; tags are stored on the image itself and are shared by every gallery it appears in."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:221
+#: includes/class-lichtbild-editor.php:224
+msgid "This gallery takes titles, captions and alt text from the Media Library. What you type below is saved either way, and shown only where the Media Library field is empty."
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:241
 msgid "This gallery has no images yet."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:246
-#: includes/class-lichtbild-editor.php:307
+#: includes/class-lichtbild-editor.php:300
+#: includes/class-lichtbild-editor.php:361
 msgid "Title"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:248
-#: includes/class-lichtbild-editor.php:311
+#: includes/class-lichtbild-editor.php:302
+#: includes/class-lichtbild-editor.php:365
 msgid "Alt text"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:258
+#: includes/class-lichtbild-editor.php:312
 msgid "Image missing"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:273
-#: includes/class-lichtbild-editor.php:313
+#: includes/class-lichtbild-editor.php:327
+#: includes/class-lichtbild-editor.php:367
 msgid "Tags"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:376
+#: includes/class-lichtbild-editor.php:430
 msgid "Layout"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:378
+#: includes/class-lichtbild-editor.php:432
 msgid "Justified rows — images keep their aspect ratio"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:379
+#: includes/class-lichtbild-editor.php:433
 msgid "Fixed columns"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:383
+#: includes/class-lichtbild-editor.php:437
 msgid "Used by the fixed-column layout."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:384
+#: includes/class-lichtbild-editor.php:438
 msgid "Row height"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:384
+#: includes/class-lichtbild-editor.php:438
 msgid "Target height in pixels for justified rows."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:385
+#: includes/class-lichtbild-editor.php:439
 msgid "Gutter"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:385
+#: includes/class-lichtbild-editor.php:439
 msgid "Space between images, in pixels."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:387
+#: includes/class-lichtbild-editor.php:441
 msgid "Grid image size"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:388
+#: includes/class-lichtbild-editor.php:442
 msgid "Lightbox image size"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:393
+#: includes/class-lichtbild-editor.php:447
 msgid "Show titles"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:395
+#: includes/class-lichtbild-editor.php:449
 msgid "Not at all"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:396
+#: includes/class-lichtbild-editor.php:450
 msgid "On hover, over the image"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:397
+#: includes/class-lichtbild-editor.php:451
 msgid "Below the image"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:403
-msgid "Behaviour"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:405
-msgid "Load images lazily"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:406
-msgid "Discourage right-click saving"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:407
-msgid "Keyboard navigation in the lightbox"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:408
-msgid "Offer a download button in the lightbox"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:415
-msgid "Lightbox theme"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:417
-msgid "Dark"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:418
-msgid "Light"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:424
-msgid "Pagination"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:426
-msgid "Split the gallery into pages"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:427
-msgid "Scroll back to the top when the page changes"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:428
-msgid "Let the lightbox run through every page, not just the visible one"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:432
-msgid "Images per page"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:432
-msgid "Zero switches pagination off."
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:436
-msgid "Tag filter"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:438
-msgid "Show a tag filter"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:439
-msgid "Include a button that clears the filter"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:446
-msgid "Filter position"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:448
-msgid "Above the images"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:449
-msgid "Below the images"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:453
-msgid "Label for the clear button"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:453
-msgid "Left empty, this reads \"All\"."
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:455
-msgid "EXIF"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:455
-msgid "Show camera data in the lightbox"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:456
-msgid "EXIF fields"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:457
-msgid "Capture date format"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:457
-msgid "A PHP date format. Left empty, the site's own is used."
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:459
-msgid "Sharing"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:459
-msgid "Show sharing buttons in the lightbox"
+#: includes/class-lichtbild-editor.php:461
+msgid "Image metadata"
 msgstr ""
 
 #: includes/class-lichtbild-editor.php:463
-msgid "Networks"
+msgid "Take titles, captions and alt text from the Media Library"
 msgstr ""
 
 #: includes/class-lichtbild-editor.php:465
-msgid "Facebook"
+msgid "Off, this gallery shows the title, caption and alt text saved on its own rows below. On, it shows what the Media Library holds for each image today — so editing an image there changes it in every gallery at once. A field the Media Library leaves empty falls back to the row below, which is why alt text never disappears when you switch this on. Lichtbild never writes to the Media Library either way."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:466
-msgid "X / Twitter"
+#: includes/class-lichtbild-editor.php:470
+msgid "Behaviour"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:467
-msgid "Pinterest"
+#: includes/class-lichtbild-editor.php:472
+msgid "Load images lazily"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:468
-msgid "Email"
+#: includes/class-lichtbild-editor.php:473
+msgid "Discourage right-click saving"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:474
+msgid "Keyboard navigation in the lightbox"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:475
+msgid "Offer a download button in the lightbox"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:482
+msgid "Lightbox theme"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:484
+msgid "Dark"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:485
+msgid "Light"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:491
+msgid "Pagination"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:493
+msgid "Split the gallery into pages"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:494
+msgid "Scroll back to the top when the page changes"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:495
+msgid "Let the lightbox run through every page, not just the visible one"
 msgstr ""
 
 #: includes/class-lichtbild-editor.php:499
+msgid "Images per page"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:499
+msgid "Zero switches pagination off."
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:503
+msgid "Tag filter"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:505
+msgid "Show a tag filter"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:506
+msgid "Include a button that clears the filter"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:513
+msgid "Filter position"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:515
+msgid "Above the images"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:516
+msgid "Below the images"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:520
+msgid "Label for the clear button"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:520
+msgid "Left empty, this reads \"All\"."
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:522
+msgid "EXIF"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:522
+msgid "Show camera data in the lightbox"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:523
+msgid "EXIF fields"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:524
+msgid "Capture date format"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:524
+msgid "A PHP date format. Left empty, the site's own is used."
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:526
+msgid "Sharing"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:526
+msgid "Show sharing buttons in the lightbox"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:530
+msgid "Networks"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:532
+msgid "Facebook"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:533
+msgid "X / Twitter"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:534
+msgid "Pinterest"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:535
+msgid "Email"
+msgstr ""
+
+#: includes/class-lichtbild-editor.php:566
 msgid "Camera make"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:500
+#: includes/class-lichtbild-editor.php:567
 msgid "Camera model"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:501
+#: includes/class-lichtbild-editor.php:568
 #: includes/class-lichtbild-exif.php:79
 msgid "Focal length"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:502
+#: includes/class-lichtbild-editor.php:569
 #: includes/class-lichtbild-exif.php:91
 msgid "Aperture"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:503
+#: includes/class-lichtbild-editor.php:570
 #: includes/class-lichtbild-exif.php:102
 msgid "Shutter speed"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:504
+#: includes/class-lichtbild-editor.php:571
 #: includes/class-lichtbild-exif.php:113
 msgid "ISO"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:505
+#: includes/class-lichtbild-editor.php:572
 msgid "Capture date"
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:653
+#: includes/class-lichtbild-editor.php:732
 msgid "The Envira shortcode with this ID keeps working too, so nothing already published needs changing."
 msgstr ""
 
-#: includes/class-lichtbild-editor.php:859
+#: includes/class-lichtbild-editor.php:938
 msgid "Add images to this gallery"
-msgstr ""
-
-#: includes/class-lichtbild-editor.php:860
-msgid "Add to gallery"
 msgstr ""
 
 #: includes/class-lichtbild-exif.php:68
@@ -559,7 +646,7 @@ msgstr ""
 msgid "%s s"
 msgstr ""
 
-#: includes/class-lichtbild-gallery.php:453
+#: includes/class-lichtbild-gallery.php:464
 msgid "All"
 msgstr ""
 
@@ -763,9 +850,9 @@ msgid "No galleries found."
 msgstr ""
 
 #: includes/class-lichtbild-post-types.php:216
-#: includes/class-lichtbild-settings.php:418
-#: includes/class-lichtbild-settings.php:419
-#: includes/class-lichtbild-settings.php:468
+#: includes/class-lichtbild-settings.php:444
+#: includes/class-lichtbild-settings.php:445
+#: includes/class-lichtbild-settings.php:494
 msgid "Lichtbild"
 msgstr ""
 
@@ -831,59 +918,59 @@ msgstr ""
 msgid "Album %d"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:438
+#: includes/class-lichtbild-settings.php:464
 msgid "Settings"
 msgstr ""
 
 #. translators: %d: number of galleries found.
-#: includes/class-lichtbild-settings.php:474
+#: includes/class-lichtbild-settings.php:500
 #, php-format
 msgid "Reading %d gallery."
 msgid_plural "Reading %d galleries."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-lichtbild-settings.php:479
+#: includes/class-lichtbild-settings.php:505
 msgid "Envira Gallery is currently active."
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:481
+#: includes/class-lichtbild-settings.php:507
 msgid "Envira Gallery is not active."
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:490
+#: includes/class-lichtbild-settings.php:516
 msgid "Handle Envira shortcodes"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:496
+#: includes/class-lichtbild-settings.php:522
 msgid "Automatically — only when Envira Gallery is deactivated"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:501
+#: includes/class-lichtbild-settings.php:527
 msgid "Always — render every gallery with Lichtbild, even if Envira is active"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:506
+#: includes/class-lichtbild-settings.php:532
 msgid "Never — only the [lichtbild-gallery] shortcode uses Lichtbild"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:511
+#: includes/class-lichtbild-settings.php:537
 msgid "This setting no longer applies. The galleries have been migrated to Lichtbild's own storage, so Envira cannot read them whatever it is set to, and Lichtbild handles both shortcodes."
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:513
+#: includes/class-lichtbild-settings.php:539
 msgid "Lichtbild reads the same gallery records Envira wrote and never modifies them, so switching between the two is lossless in both directions."
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:529
+#: includes/class-lichtbild-settings.php:555
 msgid "Shortcodes"
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:532
+#: includes/class-lichtbild-settings.php:558
 msgid "renders a gallery, and always uses Lichtbild regardless of the setting above."
 msgstr ""
 
-#: includes/class-lichtbild-settings.php:536
+#: includes/class-lichtbild-settings.php:562
 msgid "renders an album as a grid of gallery covers."
 msgstr ""
 
@@ -920,7 +1007,7 @@ msgstr ""
 
 #: blocks/gallery/block.json
 msgctxt "block description"
-msgid "Places an existing Lichtbild gallery in the post."
+msgid "Makes a new Lichtbild gallery, or places one that already exists."
 msgstr ""
 
 #: blocks/gallery/block.json
