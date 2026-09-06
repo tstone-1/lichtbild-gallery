@@ -19,6 +19,9 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.9.0 deploy, whose verification now refuses failed observations* — twelve-file order from
+  the live audit; complete captures and named mutation failures replace two false-pass paths. Archive and fresh-install
+  checks completed before deployment; SVN r3683752 and the public download match all 41 files.
 - *The 26.8.27 deploy, whose release ceremony found two broken instruments* — 17 FTPS files,
   every digest verified twice, and 160 of 160 URLs byte-identical as predicted. Holds the
   constructor-arity order that points caller-before-definition, the documented `deploy.sh urls`
@@ -154,6 +157,44 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.9.0 deploy, whose verification now refuses failed observations
+
+Released to the live site and wordpress.org on **2026-09-06**.
+
+Release commit `63cfa071ef7bee6934a72276d956144c69d405dd` passed its final local suite in
+**29.45 seconds**: PHP 8.1 through 8.5 each passed 262 checks, and all 223 main plus 8 focused
+mutations failed at their predicted assertions. The actual 41-file archive matched the installed
+copy and passed all 37 fresh-install checks under WordPress 7.1. Final Plugin Check reported
+**0 errors and 0 warnings**. The POT's support URL was corrected after generation inherited a
+scratch-directory slug; the nonce annotation explains the existing verification narrowly rather
+than disabling the surrounding security check.
+
+**The server audit selected the upload.** It named ten changed runtime files; the readme and
+bootstrap version bump made twelve. The metabox base must precede
+both editors because it introduces their completion-marker and save-notice methods. The block
+JavaScript must precede the stricter creation endpoint: the old endpoint accepts the additional
+completion marker, while the reverse order would refuse creation. The catalogue precedes the
+new notice, and the bootstrap remains last to release updated asset cache keys. The pre-deploy
+capture covered 160 URLs, all answering HTTP 200.
+
+**Two verification paths had accepted the wrong evidence.** Capture and fingerprint now reject
+failed transfers, empty responses and an empty URL population; comparison rejects malformed or
+duplicate observations and status 000. Semantic fingerprints also require a document title, with
+a URL-specific error when it is absent. The focused mutation harness now requires its named
+assertion on a failing line: a passing target plus an unrelated failure no longer proves coverage.
+
+All twelve FTPS files were digest-verified immediately after upload and re-read after the whole
+set landed: **0 mismatches**. GitHub Actions run `34048424396` completed all six jobs successfully
+at that exact release commit. The post-deploy capture again covered all 160 URLs with no non-200
+responses; comparison joined 160 of 160, with **0 changed bodies, 0 status differences and 0
+malformed rows**. Live asset URLs carried `26.9.0`, independently proving the new version arrived.
+Unchanged markup was expected for the existing valid attachment references: the new security
+guards, admin save protection and client behavior do not alter their normal server rendering.
+
+**SVN r3683752.** Exporting `tags/26.9.0` at that revision reproduced all **41 of 41** archive
+files. The ZIP served by `downloads.wordpress.org` independently matched those same 41 files,
+and the public plugin API reported `26.9.0`.
 
 ### The 26.8.27 deploy, whose release ceremony found two broken instruments
 
