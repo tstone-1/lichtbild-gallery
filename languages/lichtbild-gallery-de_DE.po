@@ -5,7 +5,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Lichtbild Gallery 26.8.25\n"
+"Project-Id-Version: Lichtbild Gallery 26.9.0\n"
 "Report-Msgid-Bugs-To: https://github.com/tstone-1/lichtbild-gallery/issues\n"
 "POT-Creation-Date: 2026-08-30T09:06:20+00:00\n"
 "PO-Revision-Date: 2026-08-08 14:00+0200\n"
@@ -1239,3 +1239,6 @@ msgstr "Bilder"
 msgctxt "block keyword"
 msgid "photos"
 msgstr "Fotos"
+
+msgid "The gallery or album data was not saved because the server received an incomplete form. Your images and settings were kept. Ask your host to increase PHP max_input_vars, then try again."
+msgstr "Die Galerie- oder Albumdaten wurden nicht gespeichert, weil der Server ein unvollständiges Formular empfangen hat. Ihre Bilder und Einstellungen wurden beibehalten. Bitten Sie Ihren Hoster, PHP max_input_vars zu erhöhen, und versuchen Sie es erneut."

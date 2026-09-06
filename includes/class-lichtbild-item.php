@@ -177,6 +177,25 @@ class Lichtbild_Item {
 	}
 
 	/**
+	 * Cached attachment existence for this item, including a missing attachment.
+	 *
+	 * @var bool|null
+	 */
+	private $attachment_exists = null;
+
+	/**
+	 * Allows metadata reads only from attachments, including for previously stored rows.
+	 *
+	 * @return bool Whether this item names a real attachment.
+	 */
+	private function has_attachment() {
+		if ( null === $this->attachment_exists ) {
+			$this->attachment_exists = $this->id > 0 && 'attachment' === get_post_type( $this->id );
+		}
+		return $this->attachment_exists;
+	}
+
+	/**
 	 * Returns the attachment ID backing this item.
 	 *
 	 * @return int Attachment ID, or 0 when the item has no attachment.
@@ -209,7 +228,7 @@ class Lichtbild_Item {
 			$this->meta_loaded = true;
 			$this->meta        = array();
 
-			if ( $this->id > 0 ) {
+			if ( $this->has_attachment() ) {
 				$meta = wp_get_attachment_metadata( $this->id );
 
 				if ( is_array( $meta ) ) {
@@ -262,7 +281,7 @@ class Lichtbild_Item {
 	 * @return string Image URL, empty when nothing is available.
 	 */
 	public function url( $size ) {
-		if ( $this->id > 0 ) {
+		if ( $this->has_attachment() ) {
 			$src = wp_get_attachment_image_src( $this->id, $size );
 
 			if ( is_array( $src ) && ! empty( $src[0] ) ) {
@@ -284,7 +303,7 @@ class Lichtbild_Item {
 	 * @return array{url:string,width:int,height:int} Lightbox source description.
 	 */
 	public function lightbox_source( $size ) {
-		if ( $this->id > 0 ) {
+		if ( $this->has_attachment() ) {
 			$src = wp_get_attachment_image_src( $this->id, $size );
 
 			if ( is_array( $src ) && ! empty( $src[0] ) ) {
@@ -334,7 +353,7 @@ class Lichtbild_Item {
 	 * @return string A srcset attribute value, empty when unavailable.
 	 */
 	public function srcset( $size ) {
-		if ( $this->id <= 0 ) {
+		if ( ! $this->has_attachment() ) {
 			return '';
 		}
 
@@ -355,7 +374,7 @@ class Lichtbild_Item {
 	 */
 	public function title() {
 		if ( $this->live_metadata ) {
-			$live = $this->id > 0 ? trim( (string) get_the_title( $this->id ) ) : '';
+			$live = $this->has_attachment() ? trim( (string) get_the_title( $this->id ) ) : '';
 
 			if ( '' !== $live ) {
 				return $live;
@@ -368,7 +387,7 @@ class Lichtbild_Item {
 			return $title;
 		}
 
-		return $this->id > 0 ? (string) get_the_title( $this->id ) : '';
+		return $this->has_attachment() ? (string) get_the_title( $this->id ) : '';
 	}
 
 	/**
@@ -388,7 +407,7 @@ class Lichtbild_Item {
 	 * @return string Caption text, restricted to post-content markup.
 	 */
 	public function caption() {
-		if ( $this->live_metadata && $this->id > 0 ) {
+		if ( $this->live_metadata && $this->has_attachment() ) {
 			$live = get_post_field( 'post_excerpt', $this->id );
 			$live = is_string( $live ) ? trim( $live ) : '';
 
@@ -399,7 +418,7 @@ class Lichtbild_Item {
 
 		$caption = isset( $this->record['caption'] ) ? trim( (string) $this->record['caption'] ) : '';
 
-		if ( '' === $caption && $this->id > 0 ) {
+		if ( '' === $caption && $this->has_attachment() ) {
 			$excerpt = get_post_field( 'post_excerpt', $this->id );
 			$caption = is_string( $excerpt ) ? $excerpt : '';
 		}
@@ -452,7 +471,7 @@ class Lichtbild_Item {
 	 * @return string Alt text.
 	 */
 	public function alt() {
-		if ( $this->live_metadata && $this->id > 0 ) {
+		if ( $this->live_metadata && $this->has_attachment() ) {
 			$live = get_post_meta( $this->id, '_wp_attachment_image_alt', true );
 			$live = is_string( $live ) ? trim( $live ) : '';
 
@@ -472,7 +491,7 @@ class Lichtbild_Item {
 			return $alt;
 		}
 
-		if ( $this->id > 0 ) {
+		if ( $this->has_attachment() ) {
 			$stored = get_post_meta( $this->id, '_wp_attachment_image_alt', true );
 
 			if ( is_string( $stored ) && '' !== trim( $stored ) ) {
@@ -493,7 +512,7 @@ class Lichtbild_Item {
 	 * @return array<int,array{slug:string,name:string}> Tags, in taxonomy order.
 	 */
 	public function tags() {
-		if ( $this->id <= 0 ) {
+		if ( ! $this->has_attachment() ) {
 			return array();
 		}
 

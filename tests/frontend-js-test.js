@@ -6,19 +6,15 @@
  * WHAT THIS CAN AND CANNOT SEE, STATED FIRST BECAUSE IT DECIDES WHAT THE RESULT MEANS
  * ===================================================================================
  *
- * `lichtbild.js` is a closed IIFE — nothing it defines is reachable from outside, and driving
- * `restoreFromHash()` for real would mean standing up a DOM, a gallery, a history object and a
- * PhotoSwipe import for the sake of one regular expression. So this does two different things,
- * and only one of them is a behavioural test:
+ * `lichtbild.js` is a closed IIFE. State tests reach it through the public init() entry
+ * point and the gallery object it attaches to each grid, without production test exports.
  *
- * 1. **The pattern is extracted from the file and executed.** Not a copy of it — the literal is
- *    lifted out of the source and evaluated, so what runs here is the object that runs in the
- *    browser, and every assertion about what it accepts is a real assertion.
- * 2. **The call sites are checked by reading the source**, which is weaker and is the half worth
- *    being honest about: a grep proves a name appears, never that the code path reached at run
- *    time is the one that appears. It is here because the first half has an obvious hole — a
- *    correct pattern that nothing consults would pass every check above it — and closing that
- *    hole cheaply is worth more than leaving it open pending a DOM harness.
+ * 1. The deep-link pattern is extracted and executed; related wiring retains source
+ *    assertions, which establish presence rather than runtime behavior.
+ * 2. The whole script runs through init() against a small DOM with controlled requests.
+ *    These checks cover pagination/filter state, stale responses, slide eligibility and
+ *    cache keys. The dynamic import alone is replaced with a module stub; no browser layout
+ *    or PhotoSwipe internals are tested.
  *
  * WHY THE PATTERN IS WORTH TESTING AT ALL
  * =======================================
@@ -38,6 +34,7 @@ const path = require( 'path' );
 const vm = require( 'vm' );
 
 let failures = 0;
+let checksRun = 0;
 
 /**
  * Reports one check.
@@ -47,6 +44,7 @@ let failures = 0;
  * @param {string}  detail Context, printed either way.
  */
 function check( label, ok, detail ) {
+	checksRun++;
 	console.log( `${ ok ? '[OK]  ' : '[FAIL]' } ${ label.padEnd( 54 ) } ${ detail || '' }` );
 
 	if ( ! ok ) {
@@ -206,9 +204,8 @@ check(
 // is logged and nothing is drawn; it is indistinguishable from a dead page.
 //
 // These three are source assertions, which is the weaker half this file is explicit about: they
-// prove the recovery is written, never that the runtime path reaches it. Driving it for real
-// needs a DOM, a module loader and a rejected dynamic import, which is the harness this
-// repository has decided twice not to build for a static grid.
+// prove the module-load recovery is written, never that a browser retries the import. The
+// state harness below stubs the import and therefore cannot establish loader behavior.
 const loader = ( source.match( /function loadPhotoSwipe\(\)[\s\S]*?\n\t}/ ) || [ '' ] )[ 0 ];
 
 check(
@@ -233,6 +230,186 @@ check(
 	restoreBody ? 'restoreFromHash() handles a rejected import' : 'restoreFromHash() could not be located'
 );
 
-console.log( `\nchecks: ${ 12 }, failing: ${ failures }` );
+// Execute the complete script against a small DOM and controllable transport. Only the
+// import is substituted: the module loader is not the subject of these state-transition
+// checks. Gallery construction and event handlers run through the public init() path.
+function classList( initial = [] ) {
+	const values = new Set( initial );
+	return {
+		add: value => values.add( value ),
+		remove: value => values.delete( value ),
+		contains: value => values.has( value ),
+		toggle( value, enabled ) {
+			if ( enabled ) { values.add( value ); } else { values.delete( value ); }
+		}
+	};
+}
 
-process.exit( failures ? 1 : 0 );
+function gridLink( id, width = 800, height = 600 ) {
+	const attributes = {
+		href: 'https://example.invalid/image-' + id + '.jpg',
+		'data-lichtbild-item': String( id ),
+		'data-pswp-width': String( width ),
+		'data-pswp-height': String( height )
+	};
+	return {
+		href: attributes.href,
+		getAttribute: key => attributes[ key ] || '',
+		querySelector: () => ( { alt: 'Synthetic image' } ),
+		closest: () => ( { classList: classList() } )
+	};
+}
+
+function frontend( overrides = {} ) {
+	const requests = [];
+	const opened = [];
+	const buttons = [ '', 'birds', 'flowers', 'constructor' ].map( slug => ( {
+		slug: slug,
+		pressed: slug === '' ? 'true' : 'false',
+		classList: classList( slug === '' ? [ 'is-current' ] : [] ),
+		getAttribute: () => slug,
+		setAttribute( key, value ) { this.pressed = value; }
+	} ) );
+	const bar = { addEventListener( type, handler ) { this.click = handler; } };
+	const slot = { innerHTML: 'old nav', addEventListener() {} };
+	const wrap = {
+		message: null,
+		querySelector( selector ) {
+			return { '.lichtbild-tags': bar, '.lichtbild-pagination-slot': slot, '.lichtbild-message': this.message }[ selector ] || null;
+		},
+		querySelectorAll: () => buttons,
+		appendChild( node ) { this.message = node; node.parentNode = this; },
+		removeChild() { this.message = null; }
+	};
+	const config = Object.assign( { id: 1, pagination: true, spanPages: true, pages: 3, scroll: false }, overrides );
+	const root = {
+		innerHTML: 'old grid',
+		links: [ gridLink( 10 ), gridLink( 20, 0, 0 ) ],
+		classList: classList(),
+		closest: () => wrap,
+		getAttribute: key => key === 'data-lichtbild-config' ? JSON.stringify( config ) : '1',
+		querySelectorAll() { return this.links; },
+		addEventListener( type, handler ) { this[ type ] = handler; },
+		contains: () => true
+	};
+	const document = {
+		readyState: 'complete',
+		querySelectorAll: () => [ root ],
+		createElement: () => ( { setAttribute() {} } )
+	};
+	const window = {
+		LichtbildSettings: { ajaxUrl: 'https://example.invalid/ajax', i18n: { loadFailed: 'Load failed' } },
+		location: { hash: '' },
+		fetch( url ) {
+			return new Promise( ( resolve, reject ) => requests.push( {
+				query: new URL( url ).searchParams,
+				succeed: data => resolve( { ok: true, json: () => Promise.resolve( { success: true, data: data } ) } ),
+				fail: () => reject( new Error( 'Synthetic network failure' ) )
+			} ) );
+		},
+		loadModule: () => Promise.resolve( { default: function ( options ) {
+			opened.push( options );
+			this.on = function () {};
+			this.init = function () {};
+		} } )
+	};
+	const importCall = 'import( settings.photoswipe )';
+	if ( source.split( importCall ).length !== 2 ) {
+		throw new Error( 'Expected exactly one dynamic import seam' );
+	}
+	vm.runInNewContext( source.replace( importCall, 'window.loadModule()' ), { window, document, URLSearchParams } );
+	return {
+		gallery: root.lichtbildGallery, root, wrap, buttons, requests, opened,
+		clickTag( slug ) { bar.click( { target: { closest: () => buttons.find( button => button.slug === slug ) } } ); }
+	};
+}
+
+const settled = () => new Promise( resolve => setImmediate( resolve ) );
+const pageResult = ( html = 'new grid' ) => ( { html: html, nav: 'new nav', page: 2, pages: 3 } );
+const itemResult = id => ( { items: [ { id: id, src: 'https://example.invalid/image.jpg', width: 800, height: 600 } ] } );
+
+async function checkFrontendState() {
+	let f = frontend();
+	f.gallery.goToPage( 2 );
+	f.requests[ 0 ].fail();
+	await settled();
+	check( 'a failed page load visibly reports its failure', f.root.classList.contains( 'is-error' ) && f.wrap.message.textContent === 'Load failed' );
+	f.gallery.goToPage( 2 );
+	f.requests[ 1 ].succeed( pageResult() );
+	await settled();
+	check( 'successful retry clears the error and stale message', f.root.innerHTML === 'new grid' && ! f.root.classList.contains( 'is-error' ) && f.wrap.message === null );
+
+	f = frontend();
+	f.clickTag( 'birds' );
+	check( 'filter request carries the chosen tag', f.requests[ 0 ].query.get( 'tag' ) === 'birds' );
+	check( 'pending filter preserves the displayed tag state', f.gallery.activeTag === '' && f.buttons[ 0 ].pressed === 'true' && f.buttons[ 1 ].pressed === 'false' );
+	f.requests[ 0 ].fail();
+	await settled();
+	check( 'failed filter keeps the grid and selected tag together', f.gallery.activeTag === '' && f.root.innerHTML === 'old grid' && f.buttons[ 0 ].pressed === 'true' );
+	f.gallery.open( f.root.links[ 0 ] );
+	check( 'lightbox after failed filter requests the displayed tag', f.requests[ 1 ].query.get( 'tag' ) === '' );
+	f.requests[ 1 ].succeed( itemResult( 10 ) );
+	await settled();
+	check( 'lightbox after failed filter opens the clicked image', f.opened.length === 1 && f.opened[ 0 ].dataSource[ f.opened[ 0 ].index ].id === 10 );
+	f.clickTag( 'birds' );
+	check( 'a failed filter can be retried with the same button', f.requests.length === 3 );
+	f.requests[ 2 ].succeed( pageResult() );
+	await settled();
+	check( 'successful filter commits grid and accessible tag state', f.gallery.activeTag === 'birds' && f.root.innerHTML === 'new grid' && f.buttons[ 1 ].pressed === 'true' && f.buttons[ 0 ].pressed === 'false' );
+
+	f = frontend();
+	f.clickTag( 'birds' );
+	f.clickTag( 'flowers' );
+	f.requests[ 1 ].succeed( pageResult( 'flowers' ) );
+	await settled();
+	f.requests[ 0 ].succeed( pageResult( 'birds' ) );
+	await settled();
+	check( 'late response cannot replace the latest filter choice', f.root.innerHTML === 'flowers' && f.gallery.activeTag === 'flowers' && f.buttons[ 2 ].pressed === 'true' );
+
+	f = frontend();
+	f.clickTag( 'birds' );
+	f.clickTag( '' );
+	check( 'selecting the displayed tag supersedes a pending filter', f.requests.length === 2 );
+	f.requests[ 1 ].succeed( pageResult( 'all' ) );
+	await settled();
+	f.requests[ 0 ].fail();
+	await settled();
+	check( 'obsolete failure cannot dim the latest successful grid', f.root.innerHTML === 'all' && f.gallery.activeTag === '' && ! f.root.classList.contains( 'is-error' ) );
+
+	f = frontend();
+	f.gallery.open( f.root.links[ 0 ] );
+	f.requests[ 0 ].succeed( itemResult( 99 ) );
+	await settled();
+	check( 'changed server list still opens the clicked photograph', f.opened.length === 1 && f.opened[ 0 ].dataSource[ f.opened[ 0 ].index ].id === 10 );
+
+	f = frontend( { pagination: false } );
+	let slides = await f.gallery.slides();
+	check( 'DOM lightbox list excludes unsized attachment fallbacks', slides.length === 1 && slides[ 0 ].id === 10 );
+	slides = await f.gallery.allSlides();
+	check( 'DOM deep-link list excludes unsized attachment fallbacks', slides.length === 1 && slides[ 0 ].id === 10 );
+	let prevented = false;
+	f.root.click( { target: { closest: () => f.root.links[ 1 ] }, preventDefault() { prevented = true; } } );
+	check( 'unsized attachment remains an ordinary navigable link', ! prevented && f.opened.length === 0 );
+
+	f = frontend();
+	const fallback = f.gallery.slides();
+	f.requests[ 0 ].fail();
+	slides = await fallback;
+	check( 'failed items request also excludes unsized DOM slides', slides.length === 1 && slides[ 0 ].id === 10 );
+
+	f = frontend();
+	f.gallery.selectTag( 'constructor' );
+	const pending = f.gallery.slides();
+	check( 'constructor tag is fetched instead of an inherited value', f.requests.length === 1 && f.requests[ 0 ].query.get( 'tag' ) === 'constructor' );
+	f.requests[ 0 ].succeed( itemResult( 10 ) );
+	await pending;
+	slides = await f.gallery.slides();
+	check( 'constructor tag results are cached normally', f.requests.length === 1 && slides.length === 1 && slides[ 0 ].id === 10 );
+}
+
+checkFrontendState().catch( error => {
+	check( 'front-end state harness completes', false, error.stack );
+} ).then( () => {
+	console.log( `\nchecks: ${ checksRun }, failing: ${ failures }` );
+	process.exitCode = failures ? 1 : 0;
+} );

@@ -2337,6 +2337,8 @@ $editor_payload = function ( $id ) use ( $site, $editor_items_payload, $editor_s
 	return wp_slash(
 		array(
 			Lichtbild_Editor::NONCE => wp_create_nonce( Lichtbild_Editor::NONCE_ACTION . $id ),
+			'lichtbild_editor_nonce_items_complete' => '1',
+			'lichtbild_editor_nonce_settings_complete' => '1',
 			'lichtbild_items'       => $images['items'],
 			'lichtbild_order'       => $images['order'],
 			'lichtbild_settings'    => $editor_settings_payload( $record['settings'] ),
@@ -2586,6 +2588,8 @@ $site->galleries[ $editor_id ]['lichtbild'] = $order_record;
 // rather than stored as an empty box.
 $junk = array(
 	Lichtbild_Editor::NONCE => wp_create_nonce( Lichtbild_Editor::NONCE_ACTION . $editor_id ),
+	'lichtbild_editor_nonce_items_complete' => '1',
+	'lichtbild_editor_nonce_settings_complete' => '1',
 	'lichtbild_order'       => 'a,b,c',
 	'lichtbild_settings'    => array(),
 	'lichtbild_items'       => array(
@@ -3222,6 +3226,8 @@ $album_payload = function ( array $record, $id ) {
 	return wp_slash(
 		array(
 			Lichtbild_Album_Editor::NONCE => wp_create_nonce( Lichtbild_Album_Editor::NONCE_ACTION . $id ),
+			'lichtbild_album_editor_nonce_items_complete' => '1',
+			'lichtbild_album_editor_nonce_settings_complete' => '1',
 			'lichtbild_album_items'       => $rows,
 			'lichtbild_album_order'       => implode( ',', $order ),
 			'lichtbild_album_settings'    => $settings,
@@ -6197,5 +6203,143 @@ if ( $site->fixture_has_password_data ) {
 		"  tests/export-fixture.py to exercise the real distribution.\n\n"
 	);
 }
+
+// Security and lifecycle regressions use synthetic posts, independent of fixture populations.
+$audit_site = $site;
+$site = new Lichtbild_Test_Site();
+Lichtbild_Test_Site::$instance = $site;
+$site->capabilities = true;
+$site->options = array( 'lichtbild_schema_version' => 2, 'lichtbild_slug_scheme' => 'generic' );
+$site->posts = array(
+	9001 => array( 'ID' => 9001, 'post_type' => 'lichtbild_gallery', 'post_status' => 'publish' ),
+	9002 => array( 'ID' => 9002, 'post_type' => 'post', 'post_status' => 'private' ),
+	9003 => array( 'ID' => 9003, 'post_type' => 'lichtbild_album', 'post_status' => 'publish' ),
+	501 => array( 'ID' => 501, 'post_type' => 'attachment', 'post_status' => 'inherit' ),
+);
+$site->attachments[501] = array( 'title' => 'SYNTHETIC IMAGE', 'excerpt' => 'SYNTHETIC CAPTION', 'alt' => 'SYNTHETIC IMAGE ALT' );
+// The stubs store excerpts and alt metadata here; the explicit post row still decides type.
+$site->attachments[9002] = array( 'excerpt' => 'SYNTHETIC NON-ATTACHMENT EXCERPT', 'alt' => 'SYNTHETIC NON-ATTACHMENT ALT' );
+$site->galleries[9002] = array( 'title' => 'SYNTHETIC PRIVATE TITLE' );
+$site->capability_overrides['read_post:9002'] = false;
+$audit_settings = new Lichtbild_Settings();
+$audit_repository = new Lichtbild_Repository( 'lichtbild_gallery', 'lichtbild_album', 'lichtbild_tag', true );
+$audit_editor = new Lichtbild_Editor( $audit_settings, $audit_repository );
+$audit_album_editor = new Lichtbild_Album_Editor( $audit_settings, $audit_repository );
+$audit_record = array( 'version' => 2, 'settings' => Lichtbild_Config::defaults(), 'items' => array( array( 'id' => 501, 'src' => 'https://example.test/image.jpg' ) ) );
+$site->galleries[9001] = array( 'lichtbild' => $audit_record );
+$site->albums[9003] = array( 'lichtbild' => array( 'version' => 2, 'settings' => Lichtbild_Album_Config::defaults(), 'items' => array( array( 'id' => 9001, 'cover_id' => 0, 'caption' => '' ) ) ) );
+
+foreach ( array( array( $audit_editor, 9001, 'lichtbild', 'galleries' ), array( $audit_album_editor, 9003, 'lichtbild_album', 'albums' ) ) as $case ) {
+	list( $writer, $post_id, $prefix, $bucket ) = $case;
+	$nonce_name = $writer::NONCE;
+	$before = $site->{$bucket}[$post_id]['lichtbild'];
+	$rows = 'albums' === $bucket ? array( 'i0' => array( 'id' => 9001 ) ) : array( 'i0' => array( 'id' => 501, 'src' => 'https://example.test/image.jpg' ) );
+	$payload = array(
+		$nonce_name => wp_create_nonce( $writer::NONCE_ACTION . $post_id ),
+		$prefix . '_items' => $rows,
+		$prefix . '_order' => 'i0',
+		$nonce_name . '_items_complete' => '1',
+		$prefix . '_settings' => array( 'columns' => '4' ),
+		$nonce_name . '_settings_complete' => '1',
+	);
+	foreach ( array( 'items', 'settings' ) as $section ) {
+		$_POST = $payload;
+		unset( $_POST[$nonce_name . '_' . $section . '_complete'] );
+		$site->writes = array();
+		$writer->save( $post_id );
+		$checks->assert( 'incomplete editor forms preserve images and settings', empty( $site->writes ) && $before === $site->{$bucket}[$post_id]['lichtbild'], $prefix . ': ' . $section );
+	}
+	$site->current_screen = (object) array( 'post_type' => $site->posts[$post_id]['post_type'] );
+	ob_start();
+	$writer->render_save_notice();
+	$notice = ob_get_clean();
+	$checks->assert( 'incomplete editor forms report the refused save', false !== strpos( $notice, 'incomplete form' ) && false !== strpos( $notice, 'notice-error' ), $prefix );
+
+	// Empty rows with BOTH markers are a deliberate remove-all, not a truncated request.
+	$_POST = $payload;
+	unset( $_POST[$prefix . '_items'] );
+	$_POST[$prefix . '_order'] = '';
+	$writer->save( $post_id );
+	$checks->assert( 'complete editor forms can remove every item', array() === $site->{$bucket}[$post_id]['lichtbild']['items'], $prefix );
+	$site->{$bucket}[$post_id]['lichtbild'] = $before;
+
+	ob_start();
+	if ( 'galleries' === $bucket ) {
+		$writer->render_images_box( (object) array( 'ID' => $post_id ) );
+	} else {
+		$writer->render_galleries_box( (object) array( 'ID' => $post_id ) );
+	}
+	$items_form = ob_get_clean();
+	ob_start();
+	$writer->render_settings_box( (object) array( 'ID' => $post_id ) );
+	$settings_form = ob_get_clean();
+	$checks->assert( 'editor completion markers follow their fields',
+		strpos( $items_form, $nonce_name . '_items_complete' ) > strpos( $items_form, 'name="' . $prefix . '_order"' )
+		&& strpos( $settings_form, $nonce_name . '_settings_complete' ) > strrpos( $settings_form, '</table>' ), $prefix );
+}
+
+$_POST = array(
+	Lichtbild_Editor::NONCE => wp_create_nonce( Lichtbild_Editor::NONCE_ACTION . 9001 ),
+	'lichtbild_editor_nonce_items_complete' => '1',
+	'lichtbild_editor_nonce_settings_complete' => '1',
+	'lichtbild_items' => array( 'i0' => array( 'id' => 9002, 'src' => 'https://example.test/dummy.jpg' ) ),
+	'lichtbild_order' => 'i0',
+);
+$audit_editor->save( 9001 );
+$checks->assert( 'gallery saves refuse private posts as images', empty( $site->galleries[9001]['lichtbild']['items'] ) );
+$site->capability_overrides['read_post:501'] = false;
+$_POST['lichtbild_items']['i0']['id'] = 501;
+$audit_editor->save( 9001 );
+$checks->assert( 'gallery saves refuse unreadable attachments', empty( $site->galleries[9001]['lichtbild']['items'] ) );
+$site->capability_overrides['read_post:501'] = true;
+$audit_editor->save( 9001 );
+$checks->assert( 'gallery saves accept readable shared attachments', 501 === ( $site->galleries[9001]['lichtbild']['items'][0]['id'] ?? 0 ) );
+$_POST['lichtbild_items']['i0']['id'] = 77777;
+$audit_editor->save( 9001 );
+$checks->assert( 'gallery saves retain deleted attachment fallback URLs', 'https://example.test/dummy.jpg' === ( $site->galleries[9001]['lichtbild']['items'][0]['src'] ?? '' ) );
+
+// A poisoned legacy record must also be harmless before its owner next edits it.
+$poisoned = new Lichtbild_Item( 9002, array( 'src' => 'https://example.test/dummy.jpg' ) );
+$valid = new Lichtbild_Item( 501, array() );
+foreach ( array( false, true ) as $live_metadata ) {
+	$poisoned->use_live_metadata( $live_metadata );
+	$valid->use_live_metadata( $live_metadata );
+	$mode = $live_metadata ? 'live metadata' : 'stored metadata';
+	$checks->assert( 'image metadata cannot expose other post types',
+		array( '', '', '' ) === array( $poisoned->title(), $poisoned->caption(), $poisoned->alt() ), $mode );
+	$checks->assert( 'real attachment metadata still supplies titles and captions',
+		array( 'SYNTHETIC IMAGE', 'SYNTHETIC CAPTION', 'SYNTHETIC IMAGE ALT' ) === array( $valid->title(), $valid->caption(), $valid->alt() ), $mode );
+}
+
+// Exercise uninstall.php itself, not a duplicated list of option deletions.
+$old_wpdb = $wpdb;
+$wpdb = new class extends Lichtbild_Test_wpdb {
+	public $options = 'wp_options';
+	public $fail_counts = false;
+	public function get_var( $sql ) {
+		return $this->fail_counts ? null : parent::get_var( $sql );
+	}
+	public function get_col( $sql ) {
+		return false !== strpos( $sql, 'FROM wp_options' ) ? array() : parent::get_col( $sql );
+	}
+};
+defined( 'WP_UNINSTALL_PLUGIN' ) || define( 'WP_UNINSTALL_PLUGIN', 'lichtbild-gallery/lichtbild-gallery.php' );
+foreach ( array( 'generic', 'envira' ) as $scheme ) {
+	$site->options = array( 'lichtbild_schema_version' => 2, 'lichtbild_slug_scheme' => $scheme, 'lichtbild_standalone' => 1, 'lichtbild_takeover' => 'always' );
+	require LICHTBILD_DIR . 'uninstall.php';
+	$again = new Lichtbild_Settings();
+	$checks->assert( 'reinstall keeps retained content URLs and standalone behavior', $scheme === $again->slug_scheme() && $again->has_migrated() && $again->standalone(), $scheme );
+}
+$site->posts = array();
+$site->taxonomies = array();
+$wpdb->fail_counts = true;
+require LICHTBILD_DIR . 'uninstall.php';
+$checks->assert( 'uninstall preserves identity when content cannot be counted', isset( $site->options['lichtbild_schema_version'], $site->options['lichtbild_slug_scheme'], $site->options['lichtbild_standalone'] ) );
+$wpdb->fail_counts = false;
+require LICHTBILD_DIR . 'uninstall.php';
+$checks->assert( 'uninstall without owned content removes plugin options', array() === $site->options );
+$wpdb = $old_wpdb;
+$site = $audit_site;
+Lichtbild_Test_Site::$instance = $site;
 
 exit( $checks->report() );

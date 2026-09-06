@@ -89,6 +89,73 @@ check 'a url that vanished is refused' 1 "$WORK/before.tsv" "$WORK/missing.tsv"
 { row 'https://example.com/a/' aaaaaaaa 200; printf 'https://example.com/b/\tbbbbbbbb\n'; row 'https://example.com/c/' cccccccc 200; } > "$WORK/malformed.tsv"
 check 'a malformed row is refused' 1 "$WORK/before.tsv" "$WORK/malformed.tsv"
 
+# An observation must exist and represent a completed HTTP response. Other status codes
+# remain valid baselines (for example a deliberately missing page), but 000 is no response.
+: > "$WORK/empty.tsv"
+check 'two empty captures are refused' 1 "$WORK/empty.tsv" "$WORK/empty.tsv"
+row 'https://example.com/a/' aaaaaaaa 000 > "$WORK/failed.tsv"
+check 'two failed requests are refused' 1 "$WORK/failed.tsv" "$WORK/failed.tsv"
+row 'https://example.com/a/' aaaaaaaa 404 > "$WORK/not-found.tsv"
+check 'an unchanged non-200 baseline passes' 0 "$WORK/not-found.tsv" "$WORK/not-found.tsv"
+{ base; row 'https://example.com/a/' aaaaaaaa 200; } > "$WORK/duplicate.tsv"
+check 'duplicate URL keys are refused' 1 "$WORK/duplicate.tsv" "$WORK/duplicate.tsv"
+check 'missing capture is refused' 1 "$WORK/absent.tsv" "$WORK/before.tsv"
+
+# Exercise both observation commands through their actual curl boundary, offline. The fake
+# implements -o and -w; even a partial transfer carrying HTTP 200 must fail before publishing.
+mkdir "$WORK/bin"
+cat > "$WORK/bin/curl" <<'MOCK'
+#!/bin/bash
+out=''
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = -o ]; then out="$2"; shift; fi
+	shift
+done
+case "$OBSERVATION_CASE" in
+	failed) printf 'partial body' > "$out"; printf 200; exit 7 ;;
+	empty) : > "$out"; printf 200 ;;
+	invalid) printf 'body' > "$out"; printf 000 ;;
+	titleless) printf '<html>body without title</html>' > "$out"; printf 200 ;;
+	good) printf '<html><title>Gallery</title>gallery</html>\n' > "$out"; printf 200 ;;
+	notfound) printf '<html><title>Not found</title>not found</html>\n' > "$out"; printf 404 ;;
+esac
+MOCK
+chmod +x "$WORK/bin/curl"
+# The last URL deliberately has no final newline.
+printf '%s' 'https://example.com/a/' > "$WORK/urls.txt"
+printf '\n' > "$WORK/blank-urls.txt"
+for mode in capture fingerprint; do
+	for scenario in good notfound failed empty invalid blank titleless; do
+		cases=$((cases + 1))
+		want=1
+		[ "$scenario" = good ] || [ "$scenario" = notfound ] && want=0
+		[ "$mode" = capture ] && [ "$scenario" = titleless ] && want=0
+		urls="$WORK/urls.txt"
+		[ "$scenario" = blank ] && urls="$WORK/blank-urls.txt"
+		out="$(PATH="$WORK/bin:$PATH" OBSERVATION_CASE="$scenario" \
+			LICHTBILD_DEPLOY_HOST=unused LICHTBILD_DEPLOY_USER=unused \
+			bash "$DEPLOY" "$mode" "$WORK/observed.tsv" "$urls" 2>&1)"
+		got=$?
+		valid=0
+		if [ "$want" -eq 0 ]; then
+			[ "$(wc -l < "$WORK/observed.tsv" | tr -d ' ')" = 1 ] && valid=1
+		else
+			[ ! -s "$WORK/observed.tsv" ] && valid=1
+		fi
+		# Semantic verification requires the title as evidence on pages with no images.
+		# A refusal must identify the failed URL instead of silently exiting.
+		if [ "$mode" = fingerprint ] && [ "$scenario" = titleless ]; then
+			[[ "$out" == *'[ERROR] could not fingerprint https://example.com/a/'* ]] || valid=0
+		fi
+		if [ "$got" = "$want" ] && [ "$valid" = 1 ]; then
+			printf '  [OK]   %s %s: exit %s, output validated\n' "$mode" "$scenario" "$got"
+		else
+			printf '  [FAIL] %s %s: exit %s, wanted %s, output valid %s\n%s\n' "$mode" "$scenario" "$got" "$want" "$valid" "$out"
+			fails=$((fails + 1))
+		fi
+	done
+done
+
 printf -- '------------------------------------------------------------------------------\n'
 printf 'cases: %s, failing: %s\n' "$cases" "$fails"
 

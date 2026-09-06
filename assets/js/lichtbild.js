@@ -137,7 +137,7 @@
 		this.config = readJson( root, 'data-lichtbild-config', {} );
 		this.id = this.config.id || parseInt( root.getAttribute( 'data-lichtbild-id' ), 10 ) || 0;
 		this.page = this.config.page || 1;
-		this.slideCache = {};
+		this.slideCache = Object.create( null );
 		this.pending = false;
 		this.sequence = 0;
 		this.activeTag = '';
@@ -183,7 +183,7 @@
 	};
 
 	/**
-	 * Returns the anchors currently visible in the grid.
+	 * Returns visible grid anchors that can be sized by the lightbox.
 	 *
 	 * @return {HTMLAnchorElement[]} Visible grid anchors.
 	 */
@@ -193,7 +193,9 @@
 			function ( link ) {
 				var figure = link.closest( '.lichtbild-item' );
 
-				return ! figure || ! figure.classList.contains( 'is-filtered' );
+				return ( ! figure || ! figure.classList.contains( 'is-filtered' ) ) &&
+					parseInt( link.getAttribute( 'data-pswp-width' ), 10 ) > 0 &&
+					parseInt( link.getAttribute( 'data-pswp-height' ), 10 ) > 0;
 			}
 		);
 	};
@@ -202,9 +204,8 @@
 	 * Resolves the slide list to open, fetching the full gallery when needed.
 	 *
 	 * A paginated gallery whose lightbox spans pages has to show images that are not in the
-	 * DOM, so those are fetched once and cached. Filtering by tag deliberately falls back to
-	 * the visible items: a visitor who filtered to one species expects to page through that
-	 * species, not through everything.
+	 * DOM, so those are fetched once and cached per tag. The applied filter spans pages too:
+	 * a visitor who filtered to one species expects to page through that species.
 	 *
 	 * @return {Promise<Object[]>} Resolves with the slide list.
 	 */
@@ -247,7 +248,7 @@
 		Promise.all( [ loadPhotoSwipe(), this.slides() ] ).then( function ( results ) {
 			var PhotoSwipe = results[ 0 ];
 			var slides = results[ 1 ];
-			var index = 0;
+			var index = -1;
 			var i;
 
 			for ( i = 0; i < slides.length; i++ ) {
@@ -255,6 +256,13 @@
 					index = i;
 					break;
 				}
+			}
+
+			// A gallery or filter may have changed since this thumbnail was rendered.
+			// Keep the click on its photograph instead of silently opening the first result.
+			if ( index < 0 ) {
+				slides = [ slideFromLink( link ) ];
+				index = 0;
 			}
 
 			self.launch( PhotoSwipe, slides, index );
@@ -784,7 +792,7 @@
 		// click while the first is in flight must win, and dropping it — as an early return
 		// on a pending flag does — leaves the bar showing one tag and the grid another.
 		var ticket = ++this.sequence;
-		var tag = this.activeTag;
+		var tag = undefined === settle.tag ? this.activeTag : settle.tag;
 
 		this.pending = true;
 		this.root.classList.add( 'is-loading' );
@@ -797,6 +805,8 @@
 			self.root.innerHTML = data.html;
 			self.page = data.page;
 			self.config.pages = data.pages;
+			self.selectTag( tag );
+			self.root.classList.remove( 'is-error' );
 
 			// The server re-renders the nav because it is the side that knows how many
 			// pages the current filter leaves; the client only swaps it in.
@@ -853,28 +863,40 @@
 
 			var slug = button.getAttribute( 'data-lichtbild-tag' ) || '';
 
-			if ( slug === self.activeTag ) {
+			if ( slug === self.activeTag && ! self.pending ) {
 				return;
 			}
-
-			self.activeTag = slug;
-
-			Array.prototype.forEach.call( bar.querySelectorAll( '.lichtbild-tag' ), function ( tag ) {
-				// The class and the attribute move together, or the announced state freezes at
-				// whatever the server rendered while the visible state keeps changing -- which
-				// is worse than never announcing it, because it is confidently wrong.
-				tag.classList.toggle( 'is-current', tag === button );
-				tag.setAttribute( 'aria-pressed', tag === button ? 'true' : 'false' );
-			} );
 
 			if ( self.config.pagination ) {
 				// A filter spans the whole gallery, so the matching set and its page count
 				// both come from the server; filtering in the DOM could only ever see the
 				// images already on this page.
-				self.goToPage( 1, { silent: true } );
+				self.goToPage( 1, { silent: true, tag: slug } );
 			} else {
+				self.selectTag( slug );
 				self.applyTagFilter();
 			}
+		} );
+	};
+
+	/**
+	 * Commits the tag represented by the displayed grid and its toggle buttons.
+	 *
+	 * A pending or failed request still displays the previous grid, so it must keep that
+	 * grid's tag for lightbox requests too. Only the latest successful response commits.
+	 *
+	 * @param {string} slug Tag slug, or an empty string for all images.
+	 *
+	 * @return {void}
+	 */
+	Gallery.prototype.selectTag = function ( slug ) {
+		this.activeTag = slug;
+
+		Array.prototype.forEach.call( this.wrap.querySelectorAll( '.lichtbild-tag' ), function ( button ) {
+			var selected = ( button.getAttribute( 'data-lichtbild-tag' ) || '' ) === slug;
+
+			button.classList.toggle( 'is-current', selected );
+			button.setAttribute( 'aria-pressed', selected ? 'true' : 'false' );
 		} );
 	};
 

@@ -16,6 +16,14 @@ $root = dirname( __DIR__ ) . '/';
 
 $mutations = array(
 	array(
+		'id' => 'FC5',
+		'file' => 'includes/class-lichtbild-block.php',
+		'find' => 'if ( ! is_array( $raw ) || ! isset( $_POST[\'images_complete\'] ) ) {',
+		'replace' => 'if ( ! is_array( $raw ) ) {',
+		'test' => 'block-create-test.php',
+		'expect' => 'a truncated image selection creates no partial gallery',
+	),
+	array(
 		'id'      => 'FC1',
 		'file'    => 'includes/class-lichtbild-block.php',
 		'find'    => "\t\t\tif ( ! wp_attachment_is_image( \$id ) ) {",
@@ -126,9 +134,10 @@ foreach ( $mutations as $mutation ) {
 
 	$restored = md5( (string) file_get_contents( $path ) ) === $before;
 	$landed   = md5( $changed ) !== $before;
+	// The named assertion itself must fail. A passing line with this label plus an
+	// unrelated failure elsewhere is not evidence that this guard is covered.
 	$killed   = 0 !== $result['status']
-		&& false !== strpos( $result['output'], '[FAIL]' )
-		&& false !== strpos( $result['output'], $mutation['expect'] );
+		&& 1 === preg_match( '/^\[FAIL\]\h+' . preg_quote( $mutation['expect'], '/' ) . '(?=\h|$)/m', $result['output'] );
 
 	if ( $landed && $restored && $killed ) {
 		printf( "[OK]   %s killed: %s\n", $mutation['id'], $mutation['expect'] );

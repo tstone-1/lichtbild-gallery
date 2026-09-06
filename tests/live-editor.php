@@ -204,6 +204,8 @@ foreach ( $record['settings'] as $key => $value ) {
 
 $_POST = array(
 	'lichtbild_editor_nonce' => wp_create_nonce( 'lichtbild_editor_' . $target ),
+	'lichtbild_editor_nonce_items_complete' => '1',
+	'lichtbild_editor_nonce_settings_complete' => '1',
 	'lichtbild_items'        => $items,
 	'lichtbild_order'        => implode( ',', $order ),
 	'lichtbild_settings'     => $form_settings,

@@ -186,7 +186,7 @@ class Lichtbild_Settings {
 		 * Content this plugin owns outranks every inference below it, and this runs BEFORE the
 		 * early return rather than after, which is not a style choice.
 		 *
-		 * `uninstall.php` deletes the schema and the slug scheme while deliberately keeping the
+		 * Earlier uninstall versions deleted the schema and slug scheme while keeping the
 		 * migrated posts and their meta -- settings are a plugin's to remove, photographs are
 		 * not. Reinstalling then landed here with no schema, found Envira's retained
 		 * `_eg_*` meta, concluded "a site with an Envira history that has not migrated", and

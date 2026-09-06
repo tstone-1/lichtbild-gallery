@@ -3,7 +3,7 @@
  * Plugin Name: Lichtbild Gallery
  * Plugin URI:  https://github.com/tstone-1/lichtbild-gallery
  * Description: Responsive galleries for WordPress. Reads existing Envira Gallery data in place, so galleries keep working without migration or a licence.
- * Version:     26.8.27
+ * Version:     26.9.0
  * Author:      tstone-1
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -61,7 +61,7 @@ defined( 'ABSPATH' ) || exit;
  * on the local WordPress before relying on it.
  */
 
-define( 'LICHTBILD_VERSION', '26.8.27' );
+define( 'LICHTBILD_VERSION', '26.9.0' );
 define( 'LICHTBILD_FILE', __FILE__ );
 define( 'LICHTBILD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LICHTBILD_URL', plugin_dir_url( __FILE__ ) );

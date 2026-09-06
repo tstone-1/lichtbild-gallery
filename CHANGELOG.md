@@ -18,6 +18,22 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [26.9.0] - 2026-09-06
+
+### Fixed
+- Gallery saves reject unrelated posts and unreadable attachments as image references. Existing
+  records cannot read titles, captions or alt text from non-attachment posts.
+- Incomplete gallery and album forms retain the previous images and settings and report the
+  refused save. Gallery creation from the block also rejects truncated image submissions.
+- Uninstall preserves the storage schema, URL scheme and standalone-page setting while owned
+  content remains, including when a database error prevents checking for it.
+- Pagination retries clear previous error messages and dimming. Pending or failed tag requests
+  keep the selected filter consistent with the displayed grid; late responses cannot replace
+  the latest selection.
+- The lightbox excludes images without known dimensions on every slide-list path, handles tag
+  names that overlap JavaScript object properties, and opens the clicked photograph when the
+  server's current image list no longer contains it.
+
 ## [26.8.27] - 2026-08-30
 
 ### Added

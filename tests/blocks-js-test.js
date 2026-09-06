@@ -613,7 +613,8 @@ async function createFlow() {
 					[ 'nonce', 'nonce-abc' ],
 					[ 'title', 'Alpen' ],
 					[ 'images[]', '501' ],
-					[ 'images[]', '502' ]
+					[ 'images[]', '502' ],
+					[ 'images_complete', '1' ]
 				] ),
 		`${ fetches.length } request(s): ` + JSON.stringify( sent && sent.options.body.entries )
 	);

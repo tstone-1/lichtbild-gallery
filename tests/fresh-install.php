@@ -163,6 +163,8 @@ out( 'gallery post created', $gallery_id > 0, "ID $gallery_id" );
 function fresh_submit( $gallery_id, $ids, $order, $extra = array() ) {
 	$_POST = array(
 		Lichtbild_Editor::NONCE => wp_create_nonce( Lichtbild_Editor::NONCE_ACTION . $gallery_id ),
+		'lichtbild_editor_nonce_items_complete' => '1',
+		'lichtbild_editor_nonce_settings_complete' => '1',
 		'lichtbild_order'       => implode( ',', array_map( function ( $i ) { return 'i' . $i; }, $order ) ),
 		'lichtbild_items'       => array(),
 	);

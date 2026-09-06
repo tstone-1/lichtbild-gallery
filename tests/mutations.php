@@ -60,6 +60,54 @@ $settings_php = 'includes/class-lichtbild-settings.php';
  * @var array<int,array{id:string,file:string,find:string,replace:string,expect:string,why:string}>
  */
 $mutations = array(
+	array(
+		'id' => 'LC2',
+		'file' => 'uninstall.php',
+		'find' => 'if ( $lichtbild_has_content && in_array( $lichtbild_option, array( \'lichtbild_schema_version\', \'lichtbild_slug_scheme\', \'lichtbild_standalone\' ), true ) ) {',
+		'replace' => 'if ( false ) {',
+		'expect' => 'reinstall keeps retained content URLs and standalone behavior',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
+	array(
+		'id' => 'FORM2',
+		'file' => 'includes/class-lichtbild-metabox-editor.php',
+		'find' => 'set_transient( static::NONCE . \'_incomplete_\' . get_current_user_id(), $post_id, 300 );',
+		'replace' => '// No notice recorded.',
+		'expect' => 'incomplete editor forms report the refused save',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
+	array(
+		'id' => 'FORM1',
+		'file' => 'includes/class-lichtbild-metabox-editor.php',
+		'find' => 'if ( ! isset( $_POST[ static::NONCE . \'_items_complete\' ], $_POST[ static::NONCE . \'_settings_complete\' ] ) ) {',
+		'replace' => 'if ( false ) {',
+		'expect' => 'incomplete editor forms preserve images and settings',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
+	array(
+		'id' => 'SEC3',
+		'file' => 'includes/class-lichtbild-item.php',
+		'find' => '$this->attachment_exists = $this->id > 0 && \'attachment\' === get_post_type( $this->id );',
+		'replace' => '$this->attachment_exists = $this->id > 0;',
+		'expect' => 'image metadata cannot expose other post types',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
+	array(
+		'id' => 'SEC2',
+		'file' => 'includes/class-lichtbild-editor.php',
+		'find' => '\'attachment\' !== $type || ! current_user_can( \'read_post\', $record[\'id\'] )',
+		'replace' => '\'attachment\' !== $type',
+		'expect' => 'gallery saves refuse unreadable attachments',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
+	array(
+		'id' => 'SEC1',
+		'file' => 'includes/class-lichtbild-editor.php',
+		'find' => 'if ( $type && ( \'attachment\' !== $type || ! current_user_can( \'read_post\', $record[\'id\'] ) ) ) {',
+		'replace' => 'if ( false ) {',
+		'expect' => 'gallery saves refuse private posts as images',
+		'why' => 'The regression must fail when its production guard is removed.',
+	),
 	// The guard chain and the ordered collect are one copy now, shared by both editors, so these
 	// split the way the visibility predicate's did: two that delete an editor's *call* into the
 	// shared code, proving each twin still consults it, and one per *leg* of the shared code
@@ -110,10 +158,9 @@ $mutations = array(
 	array(
 		'id'      => 'E5',
 		'file'    => $metabox,
-		// Both legs of the chain that end in `has_migrated()` read alike, so the comment above
-		// this one is what makes the target unique -- `editing_our_type()` ends the same way.
-		'find'    => "\t\t// anywhere else produces a record nothing reads and an edit that appears not to save.\n\t\treturn \$this->settings->has_migrated();",
-		'replace' => "\t\t// anywhere else produces a record nothing reads and an edit that appears not to save.\n\t\treturn true;",
+		// Bypass only migration authorization; completion markers must still be required.
+		'find'    => "\t\tif ( ! \$this->settings->has_migrated() ) {\n\t\t\treturn false;\n\t\t}",
+		'replace' => "\t\tif ( false ) {\n\t\t\treturn false;\n\t\t}",
 		'expect'  => 'an unmigrated site refuses to save',
 		'why'     => 'a v2 record on an unmigrated site is a record nothing reads; red for both editors',
 	),
@@ -1194,7 +1241,7 @@ $mutations = array(
 	array(
 		'id'      => 'B37',
 		'file'    => $item,
-		'find'    => "\tpublic function url( \$size ) {\n\t\tif ( \$this->id > 0 ) {",
+		'find'    => "\tpublic function url( \$size ) {\n\t\tif ( \$this->has_attachment() ) {",
 		'replace' => "\tpublic function url( \$size ) {\n\t\tif ( false ) {",
 		'expect'  => 'grid image is not the original',
 		'why'     => 'envira\'s frozen src is the full-size file, which is what made its galleries heavy',

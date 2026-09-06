@@ -139,6 +139,7 @@
 				ids.forEach( function ( chosen ) {
 					body.append( 'images[]', String( chosen ) );
 				} );
+				body.append( 'images_complete', '1' );
 
 				busyState[ 1 ]( true );
 				errorState[ 1 ]( '' );

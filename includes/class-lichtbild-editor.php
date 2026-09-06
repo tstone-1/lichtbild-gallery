@@ -68,6 +68,7 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 	public function register() {
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post', array( $this, 'save' ) );
+		add_action( 'admin_notices', array( $this, 'render_save_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 
 		$type = $this->post_type();
@@ -245,6 +246,7 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 
 		echo '</div>';
 
+		$this->complete_section( 'items' );
 		$this->render_row_template();
 	}
 
@@ -537,6 +539,7 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 		);
 
 		echo '</table>';
+		$this->complete_section( 'settings' );
 	}
 
 	/**
@@ -826,6 +829,13 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 			$record = Lichtbild_Item::sanitize_record( $row );
 
 			if ( null === $record ) {
+				continue;
+			}
+
+			// Existing posts must be readable attachments. Missing attachments retain their frozen
+			// URLs, which keeps migrated galleries usable after a media-library deletion.
+			$type = $record['id'] > 0 ? get_post_type( $record['id'] ) : false;
+			if ( $type && ( 'attachment' !== $type || ! current_user_can( 'read_post', $record['id'] ) ) ) {
 				continue;
 			}
 

@@ -1,37 +1,10 @@
 <?php
 /**
- * Removes Lichtbild's settings when the plugin is deleted.
+ * Removes installation settings while keeping gallery content and its storage identity.
  *
- * WordPress runs this only on deletion — not on deactivation — and only for a plugin that
- * ships it. Without it, the four options below survive deletion forever, which is exactly the
- * leftover Envira left behind: 37 `envira*` rows still sitting in `wp_options` months after it
- * was uninstalled.
- *
- * WHAT THIS DELIBERATELY DOES NOT DELETE, AND WHY IT WOULD BE DESTRUCTIVE TO
- * =========================================================================
- *
- * **The gallery and album records.** On a migrated site the rows are `lichtbild_gallery` and
- * `lichtbild_album` posts carrying `_lichtbild_gallery` / `_lichtbild_album` meta, and those are the
- * photographs — content, not settings. Deleting the plugin unregisters the post types, so the
- * posts stop being visible; reinstalling makes every one of them reappear untouched -- which is
- * true because `Lichtbild_Settings::initialise()` rebuilds the schema from the rows themselves
- * when the option is gone. It was NOT true until 26.8.25: this file deleted the two options that
- * decide which post types get registered, and reinstalling then read the retained Envira meta,
- * concluded the site had never migrated, and registered `envira` against rows named
- * `lichtbild_gallery`. Every retained gallery was present and unreachable, which is the precise
- * opposite of the promise in this paragraph. Deleting
- * the meta here would turn "I removed the plugin" into "I destroyed 53 galleries", with no
- * warning and no undo. WordPress's own convention is that uninstall removes a plugin's
- * settings, never the user's content, and this is the case that convention exists for.
- *
- * **Envira's `_eg_gallery_data` and `_eg_album_data`.** Those are what a rollback restores
- * authority to. They are not Lichtbild's to remove under any circumstances.
- *
- * **`envira_gallery_standalone_enabled`.** Lichtbild reads that option before the migration and
- * copies its value into its own; reading a setting never makes it yours to delete.
- *
- * So what is left after deleting Lichtbild is a site whose galleries are intact but unreachable,
- * which is recoverable by reinstalling, rather than a site whose galleries are gone.
+ * Schema, slug scheme and standalone behavior survive while owned posts or tags remain,
+ * so reinstalling restores the same URLs. Gallery/album records and Envira originals
+ * are never deleted. With no owned content, all plugin options are removed.
  *
  * @package Lichtbild
  */
@@ -41,12 +14,22 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 /**
- * Options Lichtbild writes. Every one of these is a setting, which is why it is safe to remove.
+ * Options Lichtbild writes; retained content keeps the identity options listed below.
  *
  * Named literally rather than read from `Lichtbild_Settings::OPTION_*`, because none of the
  * plugin's classes are loaded during uninstall — WordPress includes this file alone, with no
  * `lichtbild-gallery.php` before it. A `Lichtbild_Settings::OPTION_SCHEMA` here is a fatal, not a constant.
  */
+// Storage identity and permalink behavior belong to retained content, not the install.
+global $wpdb;
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall must preserve the identity of content it retains.
+$lichtbild_post_count = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type IN ( 'lichtbild_gallery', 'lichtbild_album' )" );
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- retained tags also need their original URL scheme.
+$lichtbild_tag_count = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->term_taxonomy} WHERE taxonomy = 'lichtbild_tag'" );
+// A failed observation is not proof that the content is gone.
+$lichtbild_has_content = null === $lichtbild_post_count || null === $lichtbild_tag_count
+	|| (int) $lichtbild_post_count > 0 || (int) $lichtbild_tag_count > 0;
+
 $lichtbild_options = array(
 	'lichtbild_schema_version',
 	'lichtbild_takeover',
@@ -55,6 +38,9 @@ $lichtbild_options = array(
 );
 
 foreach ( $lichtbild_options as $lichtbild_option ) {
+	if ( $lichtbild_has_content && in_array( $lichtbild_option, array( 'lichtbild_schema_version', 'lichtbild_slug_scheme', 'lichtbild_standalone' ), true ) ) {
+		continue;
+	}
 	delete_option( $lichtbild_option );
 }
 

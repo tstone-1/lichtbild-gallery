@@ -4,7 +4,7 @@ Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 26.8.27
+Stable tag: 26.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -139,6 +139,12 @@ than only in one gallery.
 
 == Changelog ==
 
+= 26.9.0 =
+* Prevent gallery image references from reading metadata from unrelated posts; reject unreadable attachments when saving.
+* Preserve existing images and settings when the server truncates an editor form; reject incomplete block gallery creation.
+* Keep retained galleries' storage identity, URLs and standalone settings across uninstall and reinstall.
+* Fix pagination retry messages, tag-filter races and lightbox handling of unsized images, special tag names and changed image lists.
+
 = 26.8.27 =
 * Galleries can be created directly from the Gallery block by choosing images from the Media
   Library. The block stores the new gallery's ID, so it remains reusable and editable elsewhere.
@@ -213,6 +219,9 @@ than only in one gallery.
 * Galleries and albums are centred in the content column again.
 
 == Upgrade Notice ==
+
+= 26.9.0 =
+Security and save fixes: gallery images cannot read metadata from unrelated posts, and incomplete editor forms no longer replace stored gallery or album data. Also fixes filtering and lightbox behavior. Updating is recommended.
 
 = 26.8.22 =
 Read this if you set Custom CSS on a gallery: the field is gone, so those rules no longer

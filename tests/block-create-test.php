@@ -313,6 +313,7 @@ function registrar() {
  * @return array{halt:string,payload:mixed} How the request ended, and the decoded JSON.
  */
 function post( array $post ) {
+	$post += array( 'images_complete' => '1' );
 	if ( ! array_key_exists( 'nonce', $post ) ) {
 		$post['nonce'] = wp_create_nonce( Lichtbild_Block::CREATE_ACTION );
 	}
@@ -779,6 +780,18 @@ check(
 		&& array() === Lichtbild_Test_Site::$instance->posts,
 	'deleted: ' . wp_json_encode( $removed ) . ', posts left: ' . count( Lichtbild_Test_Site::$instance->posts )
 );
+
+// Real PHP input parsing drops a trailing completion marker at max_input_vars.
+site();
+$limit = (int) ini_get( 'max_input_vars' );
+$large = array( 'images' => array_fill( 0, max( 1100, $limit + 10 ), '101' ), 'images_complete' => '1' );
+set_error_handler( static function () { return true; } );
+parse_str( http_build_query( $large ), $parsed );
+restore_error_handler();
+check( 'the oversized request control was actually truncated', $limit > 0 && ! isset( $parsed['images_complete'] ) );
+$parsed['images_complete'] = null;
+$partial = post( $parsed );
+check( 'a truncated image selection creates no partial gallery', 'error 400' === $partial['halt'] && array() === Lichtbild_Test_Site::$instance->posts );
 
 printf( "%s\n", implode( "\n", $report ) );
 printf( "\nchecks: %d, failing: %d\n", $checks, $failures );

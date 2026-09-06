@@ -240,6 +240,8 @@ foreach ( $record['settings'] as $key => $value ) {
 
 $_POST = array(
 	'lichtbild_album_editor_nonce' => wp_create_nonce( 'lichtbild_album_editor_' . $target ),
+	'lichtbild_album_editor_nonce_items_complete' => '1',
+	'lichtbild_album_editor_nonce_settings_complete' => '1',
 	'lichtbild_album_items'        => $items,
 	'lichtbild_album_order'        => implode( ',', $order ),
 	'lichtbild_album_settings'     => $settings_payload,

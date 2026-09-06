@@ -392,7 +392,8 @@ class Lichtbild_Block {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce is verified in `handle_create()`, this method's only caller; every value is cast to int and checked against a real attachment below, which is the sanitisation, and it cannot happen at the read because a non-scalar has to reach the `is_scalar()` test intact rather than be coerced first.
 		$raw = isset( $_POST['images'] ) ? wp_unslash( $_POST['images'] ) : array();
 
-		if ( ! is_array( $raw ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- handle_create(), this method's only caller, verifies the nonce before this completion-marker check.
+		if ( ! is_array( $raw ) || ! isset( $_POST['images_complete'] ) ) {
 			return null;
 		}
 

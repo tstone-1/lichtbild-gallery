@@ -70,6 +70,7 @@ class Lichtbild_Album_Editor extends Lichtbild_Metabox_Editor {
 	public function register() {
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post', array( $this, 'save' ) );
+		add_action( 'admin_notices', array( $this, 'render_save_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_action( 'wp_ajax_lichtbild_album_covers', array( $this, 'handle_covers' ) );
 
@@ -197,6 +198,7 @@ class Lichtbild_Album_Editor extends Lichtbild_Metabox_Editor {
 
 		echo '</div>';
 
+		$this->complete_section( 'items' );
 		$this->render_row_template();
 	}
 
@@ -459,6 +461,7 @@ class Lichtbild_Album_Editor extends Lichtbild_Metabox_Editor {
 		echo '</fieldset></td></tr>';
 
 		echo '</table>';
+		$this->complete_section( 'settings' );
 	}
 
 	/**

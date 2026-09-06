@@ -155,23 +155,26 @@ CHUNK=8192
 #
 # The bootstrap remains last because it changes `LICHTBILD_VERSION`, which releases every new
 # asset URL from cache only after all five assets have landed and been digest-verified.
+# 26.9.0 is the ten changed runtime files reported by the server audit, plus the readme
+# and bootstrap version bump. The metabox base introduces complete_section() and
+# render_save_notice(), so it must precede both editor subclasses that call/register them.
+# The block script sends images_complete before the endpoint starts requiring it: the old
+# endpoint accepts the additional field, while the reverse order would refuse new galleries.
+# The catalogue lands before the new save notice can render. The remaining PHP changes add
+# no cross-file requirements or required arguments. Bootstrap stays last so asset cache keys
+# move only after every changed asset and PHP file has been verified.
 UPLOAD_ORDER=(
-	"includes/class-lichtbild.php"
-	"includes/class-lichtbild-block.php"
-	"includes/class-lichtbild-config.php"
-	"includes/class-lichtbild-item.php"
-	"includes/class-lichtbild-gallery.php"
-	"includes/class-lichtbild-editor.php"
-	"includes/class-lichtbild-migration.php"
-	"includes/class-lichtbild-settings.php"
-	"blocks/gallery/block.json"
-	"assets/css/blocks.css"
-	"assets/css/lichtbild.css"
-	"assets/js/blocks.js"
-	"assets/js/editor.js"
-	"assets/js/lichtbild.js"
-	"readme.txt"
 	"languages/lichtbild-gallery-de_DE.mo"
+	"assets/js/blocks.js"
+	"assets/js/lichtbild.js"
+	"includes/class-lichtbild-item.php"
+	"includes/class-lichtbild-metabox-editor.php"
+	"includes/class-lichtbild-editor.php"
+	"includes/class-lichtbild-album-editor.php"
+	"includes/class-lichtbild-block.php"
+	"includes/class-lichtbild-settings.php"
+	"uninstall.php"
+	"readme.txt"
 	"lichtbild-gallery.php"
 )
 
@@ -1244,64 +1247,72 @@ cmd_urls() {
 	uv run --with pymysql python "$ROOT/tools/live-urls.py"
 }
 
-cmd_capture() {
-	local out="$1" urls="${2:-$WORK/urls.txt}"
+# Record only complete observations. A failed transfer can still print an HTTP status and
+# partial body, so require curl's success and a non-empty body before hashing either format.
+cmd_observe() {
+	local mode="$1" out="$2" urls="${3:-$WORK/urls.txt}"
+	local u code hash count=0
 
 	[ -s "$urls" ] || {
 		echo "[ERROR] no URL list at $urls; run 'urls' first" >&2
-		exit 2
+		return 2
 	}
 
-	: > "$out"
+	: > "$out" || return 1
+	: > "$WORK/observations.tsv"
 
-	# A while-read loop, never `for u in $LIST`: under zsh an unquoted variable does not
-	# word-split, so the loop runs once with the whole list as a single token.
-	while IFS= read -r u; do
+	while IFS= read -r u || [ -n "$u" ]; do
 		[ -z "$u" ] && continue
+		if ! code="$(curl -sS --max-time 30 -o "$WORK/body.html" -w '%{http_code}' "$u")"; then
+			echo "[ERROR] could not capture $u" >&2
+			return 1
+		fi
+		if [[ ! "$code" =~ ^[1-5][0-9][0-9]$ ]] || [ ! -s "$WORK/body.html" ]; then
+			echo "[ERROR] invalid status or empty body for $u" >&2
+			return 1
+		fi
 
-		local body code hash
-		body="$(curl -sS --max-time 30 -w '\n@@STATUS:%{http_code}' "$u" 2>/dev/null)"
-		code="$(printf '%s' "$body" | tail -1 | sed 's/^@@STATUS://')"
-		# LICHTBILD_VERSION reaches the asset query strings, so a version bump changes every page.
-		# Normalising ?ver= is what lets the rest be required to match exactly.
-		hash="$(printf '%s' "$body" | sed '$d' | sed 's/?ver=[0-9.]*//g' | shasum | cut -d' ' -f1)"
-
-		printf '%s\t%s\t%s\n' "$u" "$hash" "$code" >> "$out"
+		if [ "$mode" = fingerprinted ]; then
+			if ! hash="$(lichtbild_semantic < "$WORK/body.html")"; then
+				echo "[ERROR] could not fingerprint $u; the response must contain a document title" >&2
+				return 1
+			fi
+		else
+			# Only asset versions may change during an otherwise equivalent deploy.
+			hash="$(sed 's/?ver=[0-9.]*//g' "$WORK/body.html" | shasum | cut -d' ' -f1)" || return 1
+		fi
+		printf '%s\t%s\t%s\n' "$u" "$hash" "$code" >> "$WORK/observations.tsv"
+		count=$((count + 1))
 	done < "$urls"
 
-	printf 'captured %s urls, non-200: %s\n' \
-		"$(wc -l < "$out" | tr -d ' ')" \
+	if [ "$count" -eq 0 ]; then
+		echo "[ERROR] the URL list contained no URLs" >&2
+		return 1
+	fi
+	cat "$WORK/observations.tsv" > "$out" || return 1
+	printf '%s %s urls, non-200: %s\n' "$mode" "$count" \
 		"$(awk -F'\t' '$3!=200' "$out" | wc -l | tr -d ' ')"
 }
 
-cmd_fingerprint() {
-	local out="$1" urls="${2:-$WORK/urls.txt}"
-
-	[ -s "$urls" ] || {
-		echo "[ERROR] no URL list at $urls; run 'urls' first" >&2
-		exit 2
-	}
-
-	: > "$out"
-
-	while IFS= read -r u; do
-		[ -z "$u" ] && continue
-
-		local body code hash
-		body="$(curl -sS --max-time 30 -w '\n@@STATUS:%{http_code}' "$u" 2>/dev/null)"
-		code="$(printf '%s' "$body" | tail -1 | sed 's/^@@STATUS://')"
-		hash="$(printf '%s' "$body" | sed '$d' | lichtbild_semantic)"
-
-		printf '%s\t%s\t%s\n' "$u" "$hash" "$code" >> "$out"
-	done < "$urls"
-
-	printf 'fingerprinted %s urls, non-200: %s\n' \
-		"$(wc -l < "$out" | tr -d ' ')" \
-		"$(awk -F'\t' '$3!=200' "$out" | wc -l | tr -d ' ')"
-}
+cmd_capture() { cmd_observe captured "$@"; }
+cmd_fingerprint() { cmd_observe fingerprinted "$@"; }
 
 cmd_compare() {
 	local a="$1" b="$2"
+
+	# Joining two empty or failed captures says nothing about the site. Validate each input
+	# before joining, including unique URL keys so duplicates cannot hide dropped rows.
+	local input
+	for input in "$a" "$b"; do
+		if [ ! -s "$input" ] || ! awk -F'\t' '
+			NF != 3 || $1 == "" || $2 == "" || $3 !~ /^[1-5][0-9][0-9]$/ { bad = 1 }
+			seen[$1]++ { bad = 1 }
+			END { exit (bad || NR == 0) ? 1 : 0 }
+		' "$input"; then
+			echo "[ERROR] empty, malformed or duplicate observations in $input" >&2
+			return 1
+		fi
+	done
 
 	join -t "$(printf '\t')" -j1 <(sort "$a") <(sort "$b") > "$WORK/joined.tsv"
 

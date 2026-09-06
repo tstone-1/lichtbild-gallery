@@ -112,7 +112,47 @@ abstract class Lichtbild_Metabox_Editor {
 
 		// The record an editor writes is authoritative only on a migrated site, so writing one
 		// anywhere else produces a record nothing reads and an edit that appears not to save.
-		return $this->settings->has_migrated();
+		if ( ! $this->settings->has_migrated() ) {
+			return false;
+		}
+
+		// PHP truncates POST at max_input_vars. Each metabox ends with a marker so either
+		// ordering of the boxes is safe, including truncation inside the settings fields.
+		if ( ! isset( $_POST[ static::NONCE . '_items_complete' ], $_POST[ static::NONCE . '_settings_complete' ] ) ) {
+			set_transient( static::NONCE . '_incomplete_' . get_current_user_id(), $post_id, 300 );
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Prints the completion marker after a metabox's last submitted field.
+	 *
+	 * @param string $section Metabox section name.
+	 * @return void
+	 */
+	protected function complete_section( $section ) {
+		echo '<input type="hidden" name="' . esc_attr( static::NONCE . '_' . $section . '_complete' ) . '" value="1" />';
+	}
+
+	/**
+	 * Reports an incomplete submission on the affected editor's next page load.
+	 *
+	 * @return void
+	 */
+	public function render_save_notice() {
+		$screen = get_current_screen();
+		if ( ! $screen || $screen->post_type !== $this->post_type() ) {
+			return;
+		}
+		$key = static::NONCE . '_incomplete_' . get_current_user_id();
+		$post_id = (int) get_transient( $key );
+		if ( $post_id <= 0 || ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+		delete_transient( $key );
+		echo '<div class="notice notice-error"><p>' . esc_html__( 'The gallery or album data was not saved because the server received an incomplete form. Your images and settings were kept. Ask your host to increase PHP max_input_vars, then try again.', 'lichtbild-gallery' ) . '</p></div>';
 	}
 
 	/**
