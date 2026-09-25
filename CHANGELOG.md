@@ -18,6 +18,22 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [26.9.1] - 2026-09-25
+
+### Fixed
+- Image bookmarks from both former plugin names resolve to the intended gallery and image.
+- Repeated images retain their own caption and position when opened from the grid, including
+  paginated galleries. Editing an image's shared tags updates every occurrence in the editor;
+  conflicting submissions preserve the previously saved gallery data.
+- Cropped lightbox sources fall back to an uncropped image whose dimensions and responsive
+  candidates agree. Uncropped derivatives retain full-size viewport geometry.
+- Justified galleries apply the smaller mobile row height despite their configured desktop height.
+- Deployments verify staged files before replacing live paths. Archive checks inspect committed
+  sources, the public-safe push hook scans outgoing history, and development hooks stay out of
+  release archives. Native Windows test commands now use the synthetic fixture correctly.
+- Deployment checks stop on unreadable connections and rejected credentials rather than
+  treating failures as missing files or repeating failed logins.
+
 ## [26.9.0] - 2026-09-06
 
 ### Fixed

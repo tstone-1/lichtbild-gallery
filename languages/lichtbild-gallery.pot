@@ -654,6 +654,9 @@ msgstr ""
 msgid "The gallery or album data was not saved because the server received an incomplete form. Your images and settings were kept. Ask your host to increase PHP max_input_vars, then try again."
 msgstr ""
 
+msgid "The same image has conflicting tags. Reload the gallery and give each occurrence the same tags. Your images and settings were kept."
+msgstr ""
+
 #: includes/class-lichtbild-metabox-editor.php:219
 msgid "Go to Settings > Lichtbild"
 msgstr ""

@@ -172,6 +172,7 @@ class Lichtbild_Renderer {
 				// attribute for the JS to have to distinguish from a missing one.
 				'data-pswp-srcset' => $lightbox['srcset'],
 				'data-lichtbild-item' => (string) $item->id(),
+				'data-lichtbild-key' => $gallery->item_key( $item ),
 			);
 
 			if ( '' === $attributes['data-pswp-srcset'] ) {

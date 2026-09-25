@@ -358,7 +358,7 @@ foreach ( (array) glob( LICHTBILD_DIR . 'includes/class-*.php' ) as $path ) {
 $loaded = array();
 
 foreach ( get_included_files() as $path ) {
-	if ( false !== strpos( $path, '/includes/class-' ) ) {
+	if ( false !== strpos( str_replace( '\\', '/', $path ), '/includes/class-' ) ) {
 		$loaded[] = basename( $path );
 	}
 }
@@ -2853,9 +2853,9 @@ if ( null !== $tag_item ) {
 	// getting it wrong clears them everywhere that image appears, not only here.
 	//
 	// The absence of a warning is asserted for the same reason as on the nonce guard, and it
-	// became necessary for the same reason: the property is now enforced twice. A row that
-	// submitted no tags reads back as null, which the tag writer's own string check refuses
-	// anyway -- so removing the key check leaves the tags alone and announces itself only as
+	// became necessary for the same reason: the presence and type checks have distinct jobs.
+	// A missing field reads back as null, which the collector's string check refuses anyway
+	// -- so removing the presence check leaves the tags alone and announces itself only as
 	// "Undefined array key" on every save of every gallery.
 	$no_tag_field = $editor_payload( $editor_id );
 	unset( $no_tag_field['lichtbild_items'][ $tag_key ]['tags'] );

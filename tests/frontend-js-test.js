@@ -100,6 +100,8 @@ check(
 // The reason this file exists. Links written before the plugin was renamed carry the former
 // prefix, and they are in other people's messages and bookmarks.
 const legacy = resolve( '#tivira-1234-i5678' );
+const intermediate = resolve( '#atelier-1234-i5678' );
+check( 'Atelier links retain the same gallery and image', !! intermediate && intermediate.gallery === 1234 && intermediate.image === 5678 );
 
 check(
 	'a deep link from before the rename resolves identically',
@@ -245,10 +247,12 @@ function classList( initial = [] ) {
 	};
 }
 
-function gridLink( id, width = 800, height = 600 ) {
+function gridLink( id, width = 800, height = 600, key = '', caption = '' ) {
 	const attributes = {
 		href: 'https://example.invalid/image-' + id + '.jpg',
 		'data-lichtbild-item': String( id ),
+		'data-lichtbild-key': key,
+		'data-lichtbild-caption': caption,
 		'data-pswp-width': String( width ),
 		'data-pswp-height': String( height )
 	};
@@ -319,7 +323,7 @@ function frontend( overrides = {} ) {
 	}
 	vm.runInNewContext( source.replace( importCall, 'window.loadModule()' ), { window, document, URLSearchParams } );
 	return {
-		gallery: root.lichtbildGallery, root, wrap, buttons, requests, opened,
+		gallery: root.lichtbildGallery, root, wrap, buttons, requests, opened, window,
 		clickTag( slug ) { bar.click( { target: { closest: () => buttons.find( button => button.slug === slug ) } } ); }
 	};
 }
@@ -329,6 +333,27 @@ const pageResult = ( html = 'new grid' ) => ( { html: html, nav: 'new nav', page
 const itemResult = id => ( { items: [ { id: id, src: 'https://example.invalid/image.jpg', width: 800, height: 600 } ] } );
 
 async function checkFrontendState() {
+	for ( const prefix of [ 'lichtbild', 'atelier', 'tivira' ] ) {
+		const linked = frontend( { pagination: false } );
+		linked.window.location.hash = '#' + prefix + '-1-i10';
+		linked.gallery.restoreFromHash();
+		await settled();
+		check( prefix + ' deep link launches its photograph', linked.opened.length === 1 && linked.opened[ 0 ].dataSource[ linked.opened[ 0 ].index ].id === 10 );
+	}
+	for ( const pagination of [ false, true ] ) {
+		const repeated = frontend( { pagination } );
+		repeated.root.links = [ gridLink( 10, 800, 600, '10:0', 'FIRST' ), gridLink( 10, 800, 600, '10:1', 'SECOND' ) ];
+		repeated.gallery.open( repeated.root.links[ 1 ] );
+		if ( pagination ) {
+			repeated.requests[ 0 ].succeed( { items: [
+				{ id: 10, key: '10:0', caption: 'FIRST', src: 'https://example.invalid/a.jpg', width: 800, height: 600 },
+				{ id: 10, key: '10:1', caption: 'SECOND', src: 'https://example.invalid/a.jpg', width: 800, height: 600 }
+			] } );
+		}
+		await settled();
+		const opened = repeated.opened[ 0 ];
+		check( 'second occurrence keeps its caption and position, pagination=' + pagination, !! opened && opened.index === 1 && opened.dataSource[ opened.index ].caption === 'SECOND' );
+	}
 	let f = frontend();
 	f.gallery.goToPage( 2 );
 	f.requests[ 0 ].fail();

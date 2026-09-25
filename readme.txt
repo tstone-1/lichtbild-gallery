@@ -4,7 +4,7 @@ Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 26.9.0
+Stable tag: 26.9.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -139,6 +139,12 @@ than only in one gallery.
 
 == Changelog ==
 
+= 26.9.1 =
+* Restored bookmarked image links from both former plugin names.
+* Repeated images open their own captions. Tag edits stay synchronized across repeated rows, and conflicting submissions are refused without replacing saved gallery data.
+* Cropped lightbox sizes fall back to an uncropped image with matching dimensions.
+* Justified galleries use their intended smaller row height on narrow screens.
+
 = 26.9.0 =
 * Prevent gallery image references from reading metadata from unrelated posts; reject unreadable attachments when saving.
 * Preserve existing images and settings when the server truncates an editor form; reject incomplete block gallery creation.
@@ -219,6 +225,9 @@ than only in one gallery.
 * Galleries and albums are centred in the content column again.
 
 == Upgrade Notice ==
+
+= 26.9.1 =
+Restores older image bookmarks, fixes repeated-image captions and tag editing, corrects cropped lightbox geometry, and restores smaller gallery rows on mobile screens.
 
 = 26.9.0 =
 Security and save fixes: gallery images cannot read metadata from unrelated posts, and incomplete editor forms no longer replace stored gallery or album data. Also fixes filtering and lightbox behavior. Updating is recommended.

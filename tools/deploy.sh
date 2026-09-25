@@ -67,6 +67,7 @@ SLUG="lichtbild-gallery"
 NEEDS_TARGET=1
 
 case "${1:-}" in
+	source-only) NEEDS_TARGET=0 ;;
 	order-check) NEEDS_TARGET=0 ;;
 	audit) [ "${2:-}" = "--against" ] && NEEDS_TARGET=0 ;;
 	channels) NEEDS_TARGET=0 ;;
@@ -163,17 +164,21 @@ CHUNK=8192
 # The catalogue lands before the new save notice can render. The remaining PHP changes add
 # no cross-file requirements or required arguments. Bootstrap stays last so asset cache keys
 # move only after every changed asset and PHP file has been verified.
+# 26.9.1 is the eleven differences measured by the live audit. Gallery adds item_key(), so
+# it precedes Ajax and Renderer. Ajax precedes Renderer so keyed grid links cannot briefly
+# meet an endpoint without occurrence keys. The front-end script accepts old unkeyed markup;
+# the editor script synchronizes shared tags before PHP begins rejecting conflicting rows.
+# The catalogue precedes that new notice, and the bootstrap releases asset cache keys last.
 UPLOAD_ORDER=(
 	"languages/lichtbild-gallery-de_DE.mo"
-	"assets/js/blocks.js"
+	"assets/css/lichtbild.css"
+	"assets/js/editor.js"
 	"assets/js/lichtbild.js"
 	"includes/class-lichtbild-item.php"
-	"includes/class-lichtbild-metabox-editor.php"
+	"includes/class-lichtbild-gallery.php"
+	"includes/class-lichtbild-ajax.php"
+	"includes/class-lichtbild-renderer.php"
 	"includes/class-lichtbild-editor.php"
-	"includes/class-lichtbild-album-editor.php"
-	"includes/class-lichtbild-block.php"
-	"includes/class-lichtbild-settings.php"
-	"uninstall.php"
 	"readme.txt"
 	"lichtbild-gallery.php"
 )
@@ -198,8 +203,9 @@ netrc() {
 			printf 'machine %s login %s password ' "$HOST" "$USER_NAME"
 			security find-internet-password -s "$HOST" -a "$USER_NAME" -w
 		} > "$WORK/netrc" || {
-			echo "[ERROR] no keychain entry for $USER_NAME@$HOST" >&2
-			exit 2
+			rm -f "$WORK/netrc"
+			echo "[ERROR] could not read the FTPS credential from the login keychain" >&2
+			return 2
 		}
 	fi
 
@@ -207,23 +213,39 @@ netrc() {
 }
 
 ftp() {
+	# All callers, including chunk retries and SIZE probes, share this per-run stop.
+	# A rejected password must cause one failed login, never one per deployed file.
+	[ -f "$WORK/ftp-auth-failed" ] && return 67
+	local credentials status
+	credentials="$(netrc)" || return 2
 	# --ftp-create-dirs so a new subdirectory in UPLOAD_ORDER works. `languages/` did not exist
 	# on the server before 26.8.13, and without this the first chunk fails with a bare "550" that
 	# reads like a permissions problem rather than a missing directory.
-	curl --netrc-file "$(netrc)" --ssl-reqd --ftp-create-dirs --max-time 120 -sS "$@"
+	curl --netrc-file "$credentials" --ssl-reqd --ftp-create-dirs --max-time 120 -sS "$@"
+	status=$?
+	if [ "$status" -eq 67 ]; then
+		: > "$WORK/ftp-auth-failed"
+		echo '[ERROR] FTP login rejected; no further authentication attempts in this run' >&2
+	fi
+	return "$status"
 }
 
 remote_size() {
-	# -I on an FTP URL asks for SIZE. A missing file gives a non-zero exit, reported as -1 so
-	# the caller can tell "absent" from "zero bytes" -- the two mean very different things here.
-	local out
-	out="$(ftp -I "ftp://$HOST$REMOTE_DIR/$1" 2>/dev/null | tr -d '\r' | awk '/Content-Length/{print $2}')"
-
-	if [ -z "$out" ]; then
-		printf '%s' "-1"
-	else
-		printf '%s' "$out"
+	# Only curl's remote-file-not-found status establishes absence. A failed connection,
+	# login or SIZE request must never turn an unreadable server into an empty server.
+	local out status
+	out="$(ftp -I "ftp://$HOST$REMOTE_DIR/$1" 2>/dev/null)"
+	status=$?
+	if [ "$status" -eq 78 ]; then
+		printf '%s' '-1'
+		return 0
 	fi
+	out="$(printf '%s\n' "$out" | tr -d '\r' | awk '/^Content-Length:/{print $2}')"
+	if [ "$status" -ne 0 ] || [[ ! "$out" =~ ^[0-9]+$ ]]; then
+		printf '%s' 'unreadable'
+		return 1
+	fi
+	printf '%s' "$out"
 }
 
 remote_digest() {
@@ -237,12 +259,44 @@ remote_digest() {
 	shasum "$WORK/verify.bin" | cut -d' ' -f1
 }
 
+# Replacement is the publication boundary: never delete the live file first. A server
+# refusing RNTO over an existing destination must stop the deploy, not trigger a fallback.
+rename_remote() {
+	ftp --quote "RNFR $REMOTE_DIR/$1" --quote "RNTO $REMOTE_DIR/$2" \
+		--list-only "ftp://$HOST$REMOTE_DIR/" >/dev/null 2>&1
+}
+
+remove_remote() {
+	ftp --quote "DELE $REMOTE_DIR/$1" --list-only "ftp://$HOST$REMOTE_DIR/" >/dev/null 2>&1
+}
+
+# Prove replacement is supported before touching any runtime path. Only disposable .tmp
+# files are involved. This checks protocol behavior; it never opts into a delete-then-move.
+check_atomic_replace() {
+	local probe=".lichtbild-$(basename "$WORK")" want got result=0
+	printf 'old\n' > "$WORK/old.bin"
+	printf 'new\n' > "$WORK/new.bin"
+	want="$(shasum "$WORK/new.bin" | cut -d' ' -f1)"
+	ftp -T "$WORK/old.bin" "ftp://$HOST$REMOTE_DIR/$probe-old.tmp" >/dev/null 2>&1 &&
+		ftp -T "$WORK/new.bin" "ftp://$HOST$REMOTE_DIR/$probe-new.tmp" >/dev/null 2>&1 &&
+		rename_remote "$probe-new.tmp" "$probe-old.tmp" || result=1
+	got="$(remote_digest "$probe-old.tmp")"
+	[ "$got" = "$want" ] || result=1
+	remove_remote "$probe-old.tmp" || true
+	remove_remote "$probe-new.tmp" || true
+	if [ "$result" -ne 0 ]; then
+		echo "[ERROR] server cannot verify replacement by rename; no runtime files uploaded" >&2
+	fi
+	return "$result"
+}
+
 # ---------------------------------------------------------------------------------------------
 # Upload one file in CHUNK-sized pieces, re-reading the remote length after each so a cut stream
 # is caught at the piece that failed rather than at the end.
 # ---------------------------------------------------------------------------------------------
 put_chunked() {
 	local rel="$1" local_path="$ROOT/$1" want got expected piece n=0 attempt
+	local staged="$1.lichtbild-$(basename "$WORK").tmp"
 	want="$(shasum "$local_path" | cut -d' ' -f1)"
 
 	rm -rf "$WORK/pieces"
@@ -259,13 +313,13 @@ put_chunked() {
 			attempt=$((attempt + 1))
 
 			if [ "$n" -eq 1 ]; then
-				ftp -T "$piece" "ftp://$HOST$REMOTE_DIR/$rel" >/dev/null 2>&1
+				ftp -T "$piece" "ftp://$HOST$REMOTE_DIR/$staged" >/dev/null 2>&1
 			else
-				ftp --append -T "$piece" "ftp://$HOST$REMOTE_DIR/$rel" >/dev/null 2>&1
+				ftp --append -T "$piece" "ftp://$HOST$REMOTE_DIR/$staged" >/dev/null 2>&1
 			fi
 
 			expected=$((expected + $(wc -c < "$piece")))
-			got="$(remote_size "$rel")"
+			got="$(remote_size "$staged")"
 
 			if [ "$got" = "$expected" ]; then
 				break
@@ -278,26 +332,38 @@ put_chunked() {
 
 			if [ "$attempt" -ge 6 ]; then
 				echo "[ERROR] $rel: piece $n did not land after $attempt attempts" >&2
+				remove_remote "$staged" || true
 				return 1
 			fi
 
 			# Truncate back by re-uploading everything already verified.
 			if [ "$expected" -eq 0 ]; then
 				: > "$WORK/empty"
-				ftp -T "$WORK/empty" "ftp://$HOST$REMOTE_DIR/$rel" >/dev/null 2>&1
+				ftp -T "$WORK/empty" "ftp://$HOST$REMOTE_DIR/$staged" >/dev/null 2>&1
 			else
 				head -c "$expected" "$local_path" > "$WORK/head.bin"
-				ftp -T "$WORK/head.bin" "ftp://$HOST$REMOTE_DIR/$rel" >/dev/null 2>&1
+				ftp -T "$WORK/head.bin" "ftp://$HOST$REMOTE_DIR/$staged" >/dev/null 2>&1
 			fi
 		done
 	done
 
-	got="$(remote_digest "$rel")"
+	got="$(remote_digest "$staged")"
 
 	if [ "$got" != "$want" ]; then
 		echo "[ERROR] $rel: digest mismatch after upload (remote $got, local $want)" >&2
+		remove_remote "$staged" || true
 		return 1
 	fi
+
+	if ! rename_remote "$staged" "$rel"; then
+		echo "[ERROR] $rel: replacement rename failed; no delete fallback attempted" >&2
+		remove_remote "$staged" || true
+		return 1
+	fi
+	[ "$(remote_digest "$rel")" = "$want" ] || {
+		echo "[ERROR] $rel: published digest could not be verified" >&2
+		return 1
+	}
 
 	printf '  [OK]   %-42s %6s bytes, %d chunks, digest verified\n' "$rel" "$expected" "$n"
 }
@@ -653,6 +719,7 @@ cmd_audit() {
 
 		echo "auditing against a tree on disk: $against"
 	else
+		netrc >/dev/null || return 2
 		echo "auditing the deployed tree, file by file, by digest"
 	fi
 
@@ -684,9 +751,8 @@ cmd_audit() {
 			# be read.
 			if [ ! -f "$src" ] && [ "$(remote_size "$rel")" != "-1" ]; then
 				printf '  UNREADABLE %s\n' "$rel"
-				unreadable=$((unreadable + 1))
-
-				continue
+				echo '[ERROR] remote observation failed; refusing further audit connections' >&2
+				return 1
 			fi
 		fi
 
@@ -783,6 +849,7 @@ cmd_audit() {
 }
 
 cmd_plan() {
+	netrc >/dev/null || return 2
 	ORDER=( "${UPLOAD_ORDER[@]}" )
 
 	echo "upload order, and why it is this order:"
@@ -805,7 +872,15 @@ cmd_plan() {
 	# detour through the fetch code on the 26.8.10 deploy to establish that nothing was wrong.
 	# A report that describes itself inaccurately is a defect in the report.
 	echo "  required by the local lichtbild-gallery.php:   $(cd "$ROOT" && grep -c "class-lichtbild-[a-z-]*\.php" lichtbild-gallery.php | tr -d ' ') classes"
-	echo "  in this upload, absent on server:   $(for rel in "${UPLOAD_ORDER[@]}"; do [ "$(remote_size "$rel")" = "-1" ] && printf '%s ' "$rel"; done)"
+	local size absent=""
+	for rel in "${UPLOAD_ORDER[@]}"; do
+		size="$(remote_size "$rel")" || {
+			echo "[ERROR] cannot read remote size for $rel; refusing the plan" >&2
+			return 1
+		}
+		[ "$size" = '-1' ] && absent="$absent $rel"
+	done
+	echo "  in this upload, absent on server:  $absent"
 
 	local ok=1
 	local new_requires=0
@@ -1155,6 +1230,8 @@ cmd_push() {
 	echo "release channels, before touching the server:"
 	cmd_channels || true
 
+	check_atomic_replace || return 1
+
 	echo
 	echo "uploading in ${CHUNK}-byte chunks:"
 
@@ -1362,6 +1439,8 @@ cmd_compare() {
 }
 
 case "${1:-}" in
+	# Sourcing with this argument exposes offline-test seams without making a connection.
+	source-only) ;;
 	# audit [--against <dir>] -- what does the server actually have? Read-only, and with
 	# `--against` it reads a directory instead, which is how tests/deploy-audit-test.sh proves
 	# every verdict without a deploy.

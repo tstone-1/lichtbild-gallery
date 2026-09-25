@@ -16,7 +16,7 @@
 	/**
 	 * Matches a deep-link fragment, naming the gallery and the image.
 	 *
-	 * The second alternative is the prefix this plugin wrote before it was renamed. A deep
+	 * The alternatives include both prefixes this plugin wrote before it was renamed. A deep
 	 * link is a thing people paste into messages and bookmark, so links carrying it are out
 	 * in the world and there is no moment at which the last one stops being followed —
 	 * whereas the cost of continuing to resolve them is one alternation, paid once per page
@@ -25,7 +25,7 @@
 	 * Only reading is bilingual. Everything this writes uses the current prefix, so a legacy
 	 * link is upgraded in the address bar as soon as the lightbox it opened writes its own.
 	 */
-	var DEEP_LINK = /^#(?:lichtbild|tivira)-(\d+)-i(\d+)$/;
+	var DEEP_LINK = /^#(?:lichtbild|atelier|tivira)-(\d+)-i(\d+)$/;
 
 	/**
 	 * Loads the PhotoSwipe module once and reuses it thereafter.
@@ -94,6 +94,7 @@
 			height: parseInt( link.getAttribute( 'data-pswp-height' ), 10 ) || 0,
 			alt: link.querySelector( 'img' ) ? link.querySelector( 'img' ).alt : '',
 			id: parseInt( link.getAttribute( 'data-lichtbild-item' ), 10 ) || 0,
+			key: link.getAttribute( 'data-lichtbild-key' ) || '',
 			title: link.getAttribute( 'data-lichtbild-title' ) || '',
 			caption: link.getAttribute( 'data-lichtbild-caption' ) || '',
 			exif: readJson( link, 'data-lichtbild-exif', null ),
@@ -117,6 +118,7 @@
 			height: entry.height || 0,
 			alt: entry.alt || '',
 			id: entry.id || 0,
+			key: entry.key || '',
 			title: entry.title || '',
 			caption: entry.caption || '',
 			exif: entry.exif || null,
@@ -244,6 +246,7 @@
 	Gallery.prototype.open = function ( link ) {
 		var self = this;
 		var wantedId = parseInt( link.getAttribute( 'data-lichtbild-item' ), 10 ) || 0;
+		var wantedKey = link.getAttribute( 'data-lichtbild-key' ) || '';
 
 		Promise.all( [ loadPhotoSwipe(), this.slides() ] ).then( function ( results ) {
 			var PhotoSwipe = results[ 0 ];
@@ -252,7 +255,7 @@
 			var i;
 
 			for ( i = 0; i < slides.length; i++ ) {
-				if ( slides[ i ].id && slides[ i ].id === wantedId ) {
+				if ( slides[ i ].id === wantedId && ( wantedKey ? slides[ i ].key === wantedKey : slides[ i ].id ) ) {
 					index = i;
 					break;
 				}

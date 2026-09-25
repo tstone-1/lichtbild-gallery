@@ -776,6 +776,10 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		$collected = $this->collect_items( $submitted, $order, $post_id );
+		if ( null === $collected ) {
+			wp_die( esc_html__( 'The same image has conflicting tags. Reload the gallery and give each occurrence the same tags. Your images and settings were kept.', 'lichtbild-gallery' ) );
+			return;
+		}
 
 		// `wp_slash()` because core's metadata layer unslashes the value it is handed — correct
 		// for the raw `$_POST` it normally receives, wrong for one already unslashed above. A
@@ -816,7 +820,7 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 	 * @param string $order     Comma-separated row keys, in display order.
 	 * @param int    $post_id   Gallery post ID.
 	 *
-	 * @return array{items:array,tags:array} Item records, and the submitted tag lists keyed by
+	 * @return array{items:array,tags:array}|null Null on conflicting tags; otherwise item records and tag lists keyed by
 	 *                                       attachment ID. A row that submitted no `tags` key
 	 *                                       is absent from that map, which is what "leave this
 	 *                                       image's tags alone" looks like.
@@ -841,7 +845,12 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 
 			$items[] = $record;
 
-			if ( $record['id'] > 0 && array_key_exists( 'tags', $row ) ) {
+			if ( $record['id'] > 0 && isset( $row['tags'] ) && is_string( $row['tags'] ) ) {
+				// An attachment has one tag set, even when the gallery shows it twice.
+				// Refuse ambiguity before either the record or the shared terms are written.
+				if ( isset( $tags[ $record['id'] ] ) && $tags[ $record['id'] ] !== $row['tags'] ) {
+					return null;
+				}
 				$tags[ $record['id'] ] = $row['tags'];
 			}
 		}
@@ -876,20 +885,12 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 	 * A refusal is silent, matching the rest of this save path: the gallery still saves, and
 	 * only the tags of images the user may not edit are left alone.
 	 *
-	 * @param int   $attachment_id Attachment ID.
-	 * @param mixed $value         Whatever the row submitted as its tag list.
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $value         Tag list validated by collect_items().
 	 *
 	 * @return void
 	 */
 	private function save_tags( $attachment_id, $value ) {
-		// Whatever a request carries, not necessarily a string: `lichtbild_items[i0][tags][]`
-		// submits an array, and casting one writes a term literally named "Array" onto the
-		// image — shared, so onto every gallery holding it — with a PHP warning to match. A row
-		// that submitted something that is not a tag list has said nothing about its tags.
-		if ( ! is_string( $value ) ) {
-			return;
-		}
-
 		if ( ! current_user_can( 'edit_post', $attachment_id ) ) {
 			return;
 		}

@@ -52,7 +52,7 @@
 
 .lichtbild-justified .lichtbild-item {
 	flex-grow: var(--lichtbild-aspect, 1.5);
-	flex-basis: calc(var(--lichtbild-aspect, 1.5) * var(--lichtbild-row) * 1px);
+	flex-basis: calc(var(--lichtbild-aspect, 1.5) * var(--lichtbild-effective-row, var(--lichtbild-row)) * 1px);
 }
 
 /*
@@ -360,7 +360,7 @@
 	}
 
 	.lichtbild-wrap {
-		--lichtbild-row: 110;
+		--lichtbild-effective-row: 110;
 	}
 
 	/* A fixed-column gallery gives up its configured count on a narrow screen, because that

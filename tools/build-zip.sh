@@ -31,12 +31,6 @@ bad()  { printf '  [FAIL] %s\n' "$*"; fails=$((fails + 1)); }
 
 command -v zip   >/dev/null || { echo "zip is required" >&2; exit 1; }
 
-version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" lichtbild-gallery.php | head -1)"
-[ -n "$version" ] || { echo "could not read LICHTBILD_VERSION from lichtbild-gallery.php" >&2; exit 1; }
-
-echo "building ${SLUG} ${version}"
-echo
-
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
@@ -49,6 +43,11 @@ fi
 
 git archive HEAD | tar -x -C "$STAGE"
 
+version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" "$STAGE/lichtbild-gallery.php" | head -1)"
+[ -n "$version" ] || { echo "could not read staged LICHTBILD_VERSION" >&2; exit 1; }
+echo "building ${SLUG} ${version}"
+echo
+
 # Now remove what .distignore names. This is deliberately NOT `rsync --exclude-from` combined
 # with `--files-from`: rsync ignores the exclusions entirely when an explicit file list is given,
 # so the first version of this script produced an archive containing the whole test suite while
@@ -57,7 +56,7 @@ while IFS= read -r pat; do
 	case "$pat" in ''|'#'*) continue ;; esac
 	# shellcheck disable=SC2086
 	( cd "$STAGE" && rm -rf $pat )
-done < .distignore
+done < "$STAGE/.distignore"
 
 echo "verifying what was produced, rather than trusting what was excluded:"
 
@@ -66,8 +65,8 @@ missing_php=0
 while IFS= read -r rel; do
 	[ -z "$rel" ] && continue
 	if [ ! -f "$STAGE/$rel" ]; then bad "required by lichtbild-gallery.php but absent: $rel"; missing_php=$((missing_php + 1)); fi
-done < <(grep -oE "LICHTBILD_DIR \. '[^']+\.php'" lichtbild-gallery.php | sed "s/LICHTBILD_DIR \. '//; s/'$//")
-required_count="$(grep -cE "LICHTBILD_DIR \. '[^']+\.php'" lichtbild-gallery.php || true)"
+done < <(grep -oE "LICHTBILD_DIR \. '[^']+\.php'" "$STAGE/lichtbild-gallery.php" | sed "s/LICHTBILD_DIR \. '//; s/'$//")
+required_count="$(grep -cE "LICHTBILD_DIR \. '[^']+\.php'" "$STAGE/lichtbild-gallery.php" || true)"
 [ "$required_count" -gt 0 ] || bad "CONTROL: found no requires in lichtbild-gallery.php at all -- the check above examined nothing"
 [ "$missing_php" -eq 0 ] && ok "$required_count required PHP files, all present"
 
@@ -78,7 +77,7 @@ while IFS= read -r rel; do
 	[ -z "$rel" ] && continue
 	assets_checked=$((assets_checked + 1))
 	[ -f "$STAGE/$rel" ] || { bad "enqueued but absent: $rel"; missing_asset=$((missing_asset + 1)); }
-done < <(grep -rhoE "assets/[A-Za-z0-9_./-]+\.(css|js)" includes/ lichtbild-gallery.php | sort -u)
+done < <(grep -rhoE "assets/[A-Za-z0-9_./-]+\.(css|js)" "$STAGE/includes/" "$STAGE/lichtbild-gallery.php" | sort -u)
 [ "$assets_checked" -gt 0 ] || bad "CONTROL: found no asset references -- the check above examined nothing"
 [ "$missing_asset" -eq 0 ] && ok "$assets_checked referenced assets, all present"
 
@@ -88,7 +87,7 @@ for f in blocks/gallery/block.json blocks/album/block.json assets/js/blocks.js; 
 done
 
 # 4. Development apparatus must NOT be there.
-for d in tests tools docs .github .git .wordpress-org AGENTS.md CHANGELOG.md TODO.md; do
+for d in tests tools docs .github .githooks .git .wordpress-org AGENTS.md CHANGELOG.md TODO.md; do
 	[ -e "$STAGE/$d" ] && bad "development apparatus shipped: $d" || ok "excluded: $d"
 done
 

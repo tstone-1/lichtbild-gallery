@@ -323,6 +323,12 @@ class Lichtbild_Item {
 				// candidate that covers what is actually on screen. Without the srcset this would
 				// be a straight bandwidth regression for everyone.
 				list( $full_width, $full_height ) = $this->dimensions();
+				// A cropped derivative cannot use the original's geometry or srcset. Keep
+				// the full-viewport policy by selecting the uncropped source in that case.
+				if ( 'full' !== $size && $full_width > 0 && $full_height > 0
+					&& abs( round( $src[1] * $full_height / $full_width ) - $src[2] ) > 1 ) {
+					return $this->lightbox_source( 'full' );
+				}
 
 				return array(
 					'url'    => $src[0],

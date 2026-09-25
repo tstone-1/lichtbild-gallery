@@ -59,6 +59,14 @@
 	 */
 	function addItem( data ) {
 		var template = wp.template( 'lichtbild-editor-item' );
+		var tags = data.lichtbildTags || '';
+
+		// A newly added occurrence inherits an unsaved tag edit already on this form.
+		$( '#lichtbild-editor-items .lichtbild-editor__item' ).each( function () {
+			if ( String( $( this ).find( 'input[name$="[id]"]' ).val() ) === String( data.id ) ) {
+				tags = $( this ).find( '.lichtbild-editor__tags' ).val();
+			}
+		} );
 
 		counter += 1;
 
@@ -77,7 +85,7 @@
 				// Supplied by the server through wp_prepare_attachment_for_js. Without it a
 				// newly added image would submit an empty tag field and clear the tags it
 				// already had — everywhere it appears, not just here.
-				tags: data.lichtbildTags || ''
+				tags: tags
 			} )
 		);
 
@@ -126,6 +134,19 @@
 		} );
 
 		$( '#lichtbild-add-images' ).on( 'click', openPicker );
+
+		list.on( 'input change', '.lichtbild-editor__tags', function () {
+			var value = $( this ).val();
+			var id = $( this ).closest( '.lichtbild-editor__item' ).find( 'input[name$="[id]"]' ).val();
+			if ( ! parseInt( id, 10 ) ) {
+				return;
+			}
+			list.find( '.lichtbild-editor__item' ).each( function () {
+				if ( $( this ).find( 'input[name$="[id]"]' ).val() === id ) {
+					$( this ).find( '.lichtbild-editor__tags' ).val( value );
+				}
+			} );
+		} );
 
 		// The note above the rows says whether what is typed into them will be shown, and that
 		// answer is a checkbox in another metabox on the same form. Bound rather than left to

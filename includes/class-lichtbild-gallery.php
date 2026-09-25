@@ -39,6 +39,13 @@ class Lichtbild_Gallery {
 	private $items;
 
 	/**
+	 * Request-local occurrence keys, independent of pagination and tag filtering.
+	 *
+	 * @var array<int,string>
+	 */
+	private $item_keys = array();
+
+	/**
 	 * Builds a gallery.
 	 *
 	 * @param int           $id       Gallery post ID.
@@ -57,9 +64,23 @@ class Lichtbild_Gallery {
 		// standalone page get the same answer as the shortcode without asking again.
 		$live = ! empty( $this->settings['live_metadata'] );
 
+		$occurrences = array();
 		foreach ( $this->items as $item ) {
+			$id = $item->id();
+			$occurrences[ $id ] = isset( $occurrences[ $id ] ) ? $occurrences[ $id ] + 1 : 0;
+			$this->item_keys[ spl_object_id( $item ) ] = $id . ':' . $occurrences[ $id ];
 			$item->use_live_metadata( $live );
 		}
+	}
+
+	/**
+	 * Identifies one occurrence without changing attachment-based public deep links.
+	 *
+	 * @param Lichtbild_Item $item Gallery item.
+	 * @return string Occurrence key, empty for an item outside this gallery.
+	 */
+	public function item_key( Lichtbild_Item $item ) {
+		return $this->item_keys[ spl_object_id( $item ) ] ?? '';
 	}
 
 	/**

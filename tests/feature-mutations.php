@@ -16,6 +16,54 @@ $root = dirname( __DIR__ ) . '/';
 
 $mutations = array(
 	array(
+		'id' => 'FR5',
+		'file' => 'assets/js/editor.js',
+		'find' => "\$( this ).find( '.lichtbild-editor__tags' ).val( value );",
+		'replace' => '// duplicate update omitted',
+		'test' => 'editor-js-test.js',
+		'expect' => 'tag edits update another occurrence',
+	),
+	array(
+		'id' => 'FR6',
+		'file' => 'assets/js/editor.js',
+		'find' => "tags = \$( this ).find( '.lichtbild-editor__tags' ).val();",
+		'replace' => '// unsaved tag edit ignored',
+		'test' => 'editor-js-test.js',
+		'expect' => 'new occurrence inherits unsaved tags',
+	),
+	array(
+		'id' => 'FR1',
+		'file' => 'includes/class-lichtbild-item.php',
+		'find' => "return \$this->lightbox_source( 'full' );",
+		'replace' => '// cropped source incorrectly retained',
+		'test' => 'review-regressions-test.php',
+		'expect' => 'cropped source falls back to the uncropped image',
+	),
+	array(
+		'id' => 'FR2',
+		'file' => 'includes/class-lichtbild-editor.php',
+		'find' => "isset( \$tags[ \$record['id'] ] ) && \$tags[ \$record['id'] ] !== \$row['tags']",
+		'replace' => 'false',
+		'test' => 'review-regressions-test.php',
+		'expect' => 'conflicting tags refuse the save before any write',
+	),
+	array(
+		'id' => 'FR3',
+		'file' => 'assets/js/lichtbild.js',
+		'find' => '(?:lichtbild|atelier|tivira)',
+		'replace' => '(?:lichtbild|tivira)',
+		'test' => 'frontend-js-test.js',
+		'expect' => 'Atelier links retain the same gallery and image',
+	),
+	array(
+		'id' => 'FR4',
+		'file' => 'assets/js/lichtbild.js',
+		'find' => "( wantedKey ? slides[ i ].key === wantedKey : slides[ i ].id )",
+		'replace' => 'true',
+		'test' => 'frontend-js-test.js',
+		'expect' => 'second occurrence keeps its caption and position, pagination=true',
+	),
+	array(
 		'id' => 'FC5',
 		'file' => 'includes/class-lichtbild-block.php',
 		'find' => 'if ( ! is_array( $raw ) || ! isset( $_POST[\'images_complete\'] ) ) {',
@@ -89,7 +137,7 @@ $mutations = array(
  * @return array{status:int,output:string}
  */
 function lichtbild_feature_test( $file ) {
-	$command = 'blocks-js-test.js' === $file
+	$command = str_ends_with( $file, '.js' )
 		? 'node ' . escapeshellarg( __DIR__ . '/' . $file )
 		: escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( __DIR__ . '/' . $file );
 	$lines   = array();

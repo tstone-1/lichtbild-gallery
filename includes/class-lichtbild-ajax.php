@@ -126,6 +126,7 @@ class Lichtbild_Ajax {
 				'width'  => $source['width'],
 				'height' => $source['height'],
 				'id'     => $item->id(),
+				'key'    => $gallery->item_key( $item ),
 				'title'  => $item->title(),
 				'alt'    => $item->alt(),
 			);

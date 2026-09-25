@@ -448,7 +448,7 @@ function wp_get_attachment_image_src( $attachment_id, $size = 'thumbnail' ) {
 }
 
 /**
- * Builds a srcset from every generated size sharing the original aspect ratio.
+ * Builds a srcset from generated sizes sharing the requested image's aspect ratio.
  *
  * @param int    $attachment_id Attachment ID.
  * @param string $size          Registered size name.
@@ -465,7 +465,8 @@ function wp_get_attachment_image_srcset( $attachment_id, $size = 'medium' ) {
 
 	$dir    = ltrim( dirname( $meta['file'] ), '.' );
 	$base   = $site->uploads_url() . ( '' !== $dir ? '/' . $dir : '' );
-	$ratio  = $meta['width'] / max( 1, $meta['height'] );
+	$source = wp_get_attachment_image_src( $attachment_id, $size );
+	$ratio  = $source[1] / max( 1, $source[2] );
 	$parts  = array();
 
 	foreach ( $meta['sizes'] as $entry ) {
@@ -473,7 +474,7 @@ function wp_get_attachment_image_srcset( $attachment_id, $size = 'medium' ) {
 			continue;
 		}
 
-		// WordPress only offers sizes whose aspect matches the original, so cropped
+		// WordPress only offers sizes whose aspect matches the requested image, so cropped
 		// thumbnails never end up in a srcset alongside uncropped ones.
 		if ( abs( ( $entry['width'] / $entry['height'] ) - $ratio ) > 0.02 ) {
 			continue;
@@ -482,7 +483,9 @@ function wp_get_attachment_image_srcset( $attachment_id, $size = 'medium' ) {
 		$parts[ (int) $entry['width'] ] = $base . '/' . $entry['file'] . ' ' . (int) $entry['width'] . 'w';
 	}
 
-	$parts[ (int) $meta['width'] ] = $site->uploads_url() . '/' . $meta['file'] . ' ' . (int) $meta['width'] . 'w';
+	if ( abs( $meta['width'] / max( 1, $meta['height'] ) - $ratio ) <= 0.02 ) {
+		$parts[ (int) $meta['width'] ] = $site->uploads_url() . '/' . $meta['file'] . ' ' . (int) $meta['width'] . 'w';
+	}
 
 	if ( count( $parts ) < 2 ) {
 		return false;

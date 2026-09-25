@@ -85,11 +85,11 @@ functions the plugin calls, and the suite renders every gallery in a fixture and
 ```sh
 php tests/make-fixture.php          # generate a synthetic corpus, no database needed
 php tests/render-test.php tests/fixture-synthetic.json
-php tests/mutations.php             # each check must be provably capable of failing
+php tests/mutations.php --fixture=tests/fixture-synthetic.json
 php tests/i18n-test.php
 ```
 
-238 checks and 209 mutations, each check reported with the population it examined. A check that
+Each check is reported with the population it examined. A check that
 examined nothing is reported `[EMPTY]` and counts as failing, because a conditional check that
 stops running would otherwise vanish from the report and read as "not applicable".
 

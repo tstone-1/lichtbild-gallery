@@ -99,6 +99,30 @@ jobs:
         # about is simply not shown, and every rendering, PHP and live-URL check passes over it.
         run: node tests/frontend-js-test.js
 
+      - name: Check repeated images, shared tags and cropped sources
+        run: |
+          php tests/review-regressions-test.php
+          node tests/editor-js-test.js
+
+      - name: Check interrupted uploads preserve the live file
+        if: matrix.php == '8.2'
+        run: |
+          bash tests/deploy-upload-test.sh
+          bash tests/deploy-credentials-test.sh
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: matrix.php == '8.2'
+
+      - name: Check committed packaging and outgoing Git history
+        if: matrix.php == '8.2'
+        run: uv run python tests/review-tooling-test.py
+
+      - name: Check the responsive gallery in a browser
+        if: matrix.php == '8.2'
+        run: |
+          uv run --with playwright python -m playwright install --with-deps chromium
+          uv run --with playwright python tests/layout-test.py
+
       - name: Check the deploy script's removed-method ordering rule
         # The only test here that covers tooling rather than the plugin, and it earns the slot:
         # the rule it guards is the one whose absence would have taken the live site down on

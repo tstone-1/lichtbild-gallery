@@ -191,10 +191,10 @@ $mutations = array(
 	array(
 		'id'      => 'E8',
 		'file'    => $editor,
-		'find'    => "if ( \$record['id'] > 0 && array_key_exists( 'tags', \$row ) ) {",
-		'replace' => "if ( \$record['id'] > 0 ) {",
+		'find'    => "if ( \$record['id'] > 0 && isset( \$row['tags'] ) && is_string( \$row['tags'] ) ) {",
+		'replace' => "if ( \$record['id'] > 0 && is_string( \$row['tags'] ) ) {",
 		'expect'  => 'a row with no tag field leaves tags alone',
-		'why'     => 'a row without the field would clear that image\'s tags everywhere',
+		'why'     => 'the presence guard prevents a warning on a row with no tag field; the type guard is tested separately',
 	),
 	array(
 		'id'      => 'E9',
@@ -777,8 +777,8 @@ $mutations = array(
 	array(
 		'id'      => 'N1',
 		'file'    => $editor,
-		'find'    => "\t\tif ( ! is_string( \$value ) ) {\n\t\t\treturn;\n\t\t}",
-		'replace' => "\t\t\$value = (string) \$value;",
+		'find'    => "if ( \$record['id'] > 0 && isset( \$row['tags'] ) && is_string( \$row['tags'] ) ) {",
+		'replace' => "if ( \$record['id'] > 0 && isset( \$row['tags'] ) ) { \$row['tags'] = (string) \$row['tags'];",
 		'expect'  => 'a non-string field is ignored rather than cast',
 		'why'     => 'an array tag field casts to a term named "Array", written to every gallery holding the image',
 	),

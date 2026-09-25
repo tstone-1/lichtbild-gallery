@@ -37,10 +37,10 @@ $root = dirname( __DIR__ );
 /**
  * The ceiling, in bytes. Not the harness's own limit: the point is to be told while there is
  * still room to think, rather than when the file has already stopped loading. At the time of
- * writing AGENTS.md is a little over 45 KB, so this allows roughly 40% of growth before it asks
- * for another split. Raise it only with an argument for why the next entry belongs in the index.
+ * writing the shared instructions reserve 30 KB for this repository. Keep the local limit
+ * inside that allowance rather than passing locally while the combined load fails.
  */
-const AGENTS_MAX_BYTES = 65536;
+const AGENTS_MAX_BYTES = 30000;
 
 $agents = $root . '/AGENTS.md';
 $text   = file_get_contents( $agents );
@@ -215,8 +215,6 @@ foreach ( $bodies as $rel => $body ) {
 		continue;
 	}
 
-	++$self_indexed;
-
 	printf( "%s: %d hooks\n", $rel, count( $titles ) );
 
 	$heads = array();
@@ -237,6 +235,13 @@ foreach ( $bodies as $rel => $body ) {
 		$heads[ $title ] = true;
 	}
 
+	// Cross-references inside historical lessons are not an index of every section in
+	// that corpus. Only the explicitly self-indexed deploy records need the reverse check;
+	// all references above are still validated, wherever they occur.
+	if ( 'docs/deploys.md' !== $rel ) {
+		continue;
+	}
+	++$self_indexed;
 	preg_match_all( '/^### (.+?)\s*$/m', $body, $records );
 
 	foreach ( $records[1] as $record ) {

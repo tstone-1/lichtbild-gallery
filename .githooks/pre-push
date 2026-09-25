@@ -1,19 +1,18 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # pre-push hook for public repositories.
 # Blocks pushes that would leak internal-only content into GitHub.
-# Uses the PowerShell audit when available, with a POSIX fallback for macOS/Linux.
+# Reads the shared audit policy, but scans outgoing Git objects, never checkout files.
 #
 # Activate per-clone with: git config core.hooksPath .githooks
 # Skip a single push (rare, use with care): SKIP_AGENT_MEMORY_AUDIT=1 git push
 
-set -u
+set -uo pipefail
 
 if [ "${SKIP_AGENT_MEMORY_AUDIT:-}" = "1" ]; then
     echo "[pre-push] SKIP_AGENT_MEMORY_AUDIT=1 -- skipping public-safe audit."
     exit 0
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
 AUDIT=""
 
 # Search the canonical agent-memory clone locations.
@@ -38,13 +37,7 @@ if [ -z "$AUDIT" ]; then
     exit 1
 fi
 
-if command -v pwsh >/dev/null 2>&1; then
-    pwsh -NoProfile -ExecutionPolicy Bypass -File "$AUDIT" -CheckPublicSafe -CheckRepoPath "$REPO_ROOT"
-    exit $?
-fi
-
-echo "[pre-push] pwsh not found; running POSIX public-safe fallback."
-echo "[pre-push] Scanning tracked text files for tokens that must not appear in a public repo..."
+echo "[pre-push] Scanning outgoing commit trees for forbidden content..."
 
 PATTERNS_FILE="$(mktemp "${TMPDIR:-/tmp}/public-safe-patterns.XXXXXX")"
 trap 'rm -f "$PATTERNS_FILE"' EXIT HUP INT TERM
@@ -69,20 +62,48 @@ if [ ! -s "$PATTERNS_FILE" ]; then
     exit 1
 fi
 
-git grep -n -I -i -E -f "$PATTERNS_FILE" -- .
-rc=$?
+# Read the same literal file exceptions as the shared audit. Refuse an unreadable policy
+# rather than silently substituting a different ruleset. The pattern list above is nonempty.
+pathspecs=( . )
+while IFS= read -r allowed; do
+    [ -n "$allowed" ] && pathspecs+=( ":(exclude)$allowed" )
+done < <(awk '
+    /^\$AllowedFiles[[:space:]]*=/ { active=1; next }
+    active && /^[[:space:]]*\)/ { exit }
+    active && /^[[:space:]]*\047/ {
+        sub(/^[[:space:]]*\047/, ""); sub(/\047[[:space:]]*,?.*$/, ""); print
+    }
+' "$AUDIT")
 
-if [ "$rc" -eq 0 ]; then
-    echo ""
-    echo "[pre-push] FAIL - forbidden tokens found."
-    echo "[pre-push] Remove/rephrase the content before pushing, or use SKIP_AGENT_MEMORY_AUDIT=1 only for a documented false positive."
-    exit 1
-fi
-
-if [ "$rc" -eq 1 ]; then
-    echo "[pre-push] OK - no forbidden tokens found."
-    exit 0
-fi
-
-echo "[pre-push] ERROR: fallback scan failed with exit code $rc."
-exit "$rc"
+commits="$PATTERNS_FILE.commits"
+trap 'rm -f "$PATTERNS_FILE" "$commits"' EXIT HUP INT TERM
+while read -r local_ref local_oid remote_ref remote_oid; do
+    if [[ ! "$local_oid" =~ ^[0-9a-f]{40,64}$ || ! "$remote_oid" =~ ^[0-9a-f]{40,64}$ ]]; then
+        echo "[pre-push] ERROR: malformed ref input" >&2
+        exit 1
+    fi
+    [[ "$local_oid" =~ ^0+$ ]] && continue # Deletion publishes no objects.
+    revisions=( "$local_oid" )
+    # On a new ref, inspect its entire reachable history. Remote-tracking refs may be
+    # stale and are not evidence that the server already has a particular commit.
+    if [[ ! "$remote_oid" =~ ^0+$ ]]; then
+        revisions+=( "^$remote_oid" )
+    fi
+    git rev-list "${revisions[@]}" > "$commits" || {
+        echo "[pre-push] ERROR: cannot enumerate outgoing history; fetch the remote and retry" >&2
+        exit 1
+    }
+    while IFS= read -r commit; do
+        # Print only object/file identifiers, never the matching proprietary value.
+        git grep -l -I -i -E -f "$PATTERNS_FILE" "$commit" -- "${pathspecs[@]}"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            echo "[pre-push] FAIL - forbidden content in outgoing history; push blocked."
+            exit 1
+        elif [ "$rc" -ne 1 ]; then
+            echo "[pre-push] ERROR: object scan failed with exit code $rc" >&2
+            exit "$rc"
+        fi
+    done < "$commits"
+done
+echo "[pre-push] OK - outgoing commit trees passed."
