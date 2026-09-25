@@ -19,6 +19,8 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.9.1 deploy, which replaces only verified files* — eleven staged FTPS files, all 160 URLs
+  unchanged semantically, and 41 matching files in SVN r3713218 and the public download.
 - *The 26.9.0 deploy, whose verification now refuses failed observations* — twelve-file order from
   the live audit; complete captures and named mutation failures replace two false-pass paths. Archive and fresh-install
   checks completed before deployment; SVN r3683752 and the public download match all 41 files.
@@ -157,6 +159,40 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.9.1 deploy, which replaces only verified files
+
+Published 2026-09-25 from Git commit `731719f`, first to the site over FTPS, then to
+wordpress.org as **SVN r3713218**. The live audit found eleven differing files, rather than
+the twelve left in the previous upload list. Gallery's new `item_key()` lands before Ajax
+and Renderer; Ajax lands before keyed links appear in the grid. The editor script lands
+before PHP starts refusing conflicting tags, and the bootstrap changes asset cache keys last.
+
+The server passed the disposable rename-replacement probe. All eleven files landed in
+**29 chunks**, without a retry. Each file was uploaded to a temporary sibling, verified by
+digest, renamed over its live path and verified again; the final pass checked the whole set.
+The subsequent full audit reported **40 matching files, zero differences, zero unreadable
+files**, and only the two deliberately absent distribution files.
+
+The new occurrence attributes intentionally change markup, so this release used semantic
+fingerprints. **160 of 160 URLs returned HTTP 200 before and after, with zero semantic or
+status differences.** A separate live check confirmed `ver=26.9.1` and the occurrence
+attributes, so an unchanged capture could not hide an upload that never landed.
+
+The committed archive's **41 files** matched the candidate already tested on a fresh
+WordPress 7.1.2 installation: all 37 install checks passed, and Plugin Check 2.1.0 reported
+no findings. The PHP 8.1–8.5 matrix, 223 main mutations, 14 feature mutations, browser layout
+check and deployment tests passed; all six CI jobs passed for the release commit. Exporting
+the committed SVN tag and downloading the public WordPress ZIP both reproduced those same
+41 files. The plugin API reported 26.9.1, and the release-channel comparison found no shared
+file differences; the site's compiled German catalogue remains the documented exception.
+
+Preparation exposed two more deployment defects: failed credential lookup left a partial
+credential file, and failed SIZE requests were classified as absent files. Repeated failed
+logins triggered an IP ban. Credential failures now remove partial state; unreadable
+connections stop audit and plan; a rejected login blocks further authentication attempts
+within that run. Fifteen offline checks cover those paths, including the command entry
+points, and a mutation confirmed that both commands reject the old absence classification.
 
 ### The 26.9.0 deploy, whose verification now refuses failed observations
 
