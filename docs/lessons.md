@@ -2542,7 +2542,7 @@ kind of thing that gets assumed.
   returns three published plugins leading with that word — `atelier-product-sorting-for-woocommerce`,
   `atelier-scroll-top` and `atelier-create-cv`. Run the query rather than reasoning about the name:
   `api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[search]=<term>`.
-- **The listing artwork lives in `.wordpress-org/` and is not in the zip.** Four screenshots in
+- **The listing artwork lives in `.wordpress-org/` and is not in the zip.** Three screenshots in
   the order `readme.txt` describes, plus an icon and banner built by `tools/build-brand.py` —
   the mark is a justified grid laid out by the plugin's own rule, so editing an aspect ratio
   re-solves the geometry rather than needing a bitmap redrawn. It asserts each PNG's exact

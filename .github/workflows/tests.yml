@@ -99,6 +99,11 @@ jobs:
         # about is simply not shown, and every rendering, PHP and live-URL check passes over it.
         run: node tests/frontend-js-test.js
 
+      - name: Check the column cap on narrow screens
+        # A fixed-column gallery drops to three columns, then two, as the viewport narrows. This
+        # cascades and evaluates the stylesheet; it does not render, so it is a contract check.
+        run: node tests/responsive-columns-test.js
+
       - name: Check repeated images, shared tags and cropped sources
         run: |
           php tests/review-regressions-test.php
