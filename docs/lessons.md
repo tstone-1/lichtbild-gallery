@@ -812,14 +812,14 @@ worse than none; and the mutation job exists at all because **a green suite prov
 until the checks have been shown capable of going red**, which is the one thing a passing badge
 hides.
 
-### PHP versions: test the one the site runs, not the one the Mac has
+### PHP versions: test the one the site runs, not the one the development machine has
 
 ```sh
 bash tests/php-matrix.sh                                # 8.1 8.2 8.3 8.4 8.5, all 220 checks each
 bash tests/php-matrix.sh tests/fixture-synthetic.json   # the same, with no database
 ```
 
-**The live site runs PHP 8.2.30; this Mac ships 8.5.** Every result before that script existed
+**The live site runs PHP 8.2.30; the development machine ships 8.5.** Every result before that script existed
 was measured on an interpreter the site does not have — not wrong, but answering a question
 nobody asked, the same family of mistake as quoting a debug-build benchmark. The suite is a
 plain PHP program with no WordPress and no database, so running it across versions costs
@@ -1635,7 +1635,7 @@ for: findings and clarifications, not a list of edits.
 ### The CRLF checkout, which had been quietly disabling the mutation harness
 
 Not part of the review, found while running it. This repository had **no `.gitattributes`**, and
-Git for Windows ships `core.autocrlf=true` in its system config, so the Windows desktop's working
+Git for Windows ships `core.autocrlf=true` in its system config, so a Windows machine's working
 tree was CRLF throughout while every blob in the repository is LF.
 
 `tests/mutations.php` matches its target text exactly, and its targets are written with `\n`. On
@@ -1643,7 +1643,7 @@ that checkout **every multi-line mutation matched nothing** — including pre-ex
 `E1`, untouched for weeks. The harness was honest about it, reporting `BROKEN: target text occurs
 0 times` rather than `SURVIVED`, which is the entire reason that rule exists and is the only
 reason this was visible at all. But the effect was that most of the suite's proof of
-falsifiability had silently stopped running on this machine, while single-line mutations kept
+falsifiability had silently stopped running, while single-line mutations kept
 killing their checks and the run looked normal.
 
 The same defect is the one `AGENTS.md` already warns about for the deploy: `tools/deploy.sh`
@@ -2585,24 +2585,14 @@ sentence that follows is nominative use and permitted. **Guideline 4** wants doc
 source: the unminified PhotoSwipe sources ship beside the minified ones, and a `readme.txt` FAQ
 entry now says so rather than leaving it to be noticed.
 
-**Published 2026-08-27 as r3669173**, from a checkout at `~/Developer/_svn/lichtbild-gallery`:
+**Published 2026-08-27 as r3669173**, from an SVN checkout of the plugin:
 `tools/build-zip.sh`'s tree into `trunk/`, copied to `tags/26.8.25/`, screenshots into the
 checkout's own `assets/`. Verified by exporting the committed paths back and digest-comparing
 them to the reviewed zip — **including the zip the directory rebuilds and actually serves**,
-which is a different archive of identical files. Two things to know for the next release:
-`svn` is `brew install svn` (macOS has not shipped it since 10.15), and the SVN password is
-**separate** from the wordpress.org login, set at
-`profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`. **Since 2026-08-28 it is
-in the macOS login keychain**, so it no longer has to be hunted for or regenerated:
-
-```sh
-security find-internet-password -s plugins.svn.wordpress.org -a tstone1 -w \
-  | svn commit -m "Lichtbild Gallery <version>" --username tstone1 --password-from-stdin --non-interactive
-```
-
-Piped, never `--password`, which puts it in the argument list; `svn` caches nothing, so
-`~/.subversion/auth/svn.simple/` stays empty and the keychain is the only copy. SVN here is a
-release system rather than a history — commit ready versions only.
+which is a different archive of identical files. The SVN password is separate from the
+wordpress.org login and goes in over `--password-from-stdin`, never `--password`, which puts it in
+the argument list. SVN here is a release system rather than a history — commit ready versions
+only.
 
 > That comparison ran once against a zip the directory was still generating and reported all 41
 > files as differences on a healthy publish — a truncated download, not a mismatch. The mechanism

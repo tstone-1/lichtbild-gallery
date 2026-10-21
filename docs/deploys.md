@@ -344,11 +344,7 @@ offered an update in wp-admin, and applying it is what deletes the German `.mo`.
 **SVN, r3670765.** `rsync -a --delete --exclude .svn` from the unpacked archive into `trunk/`,
 `svn copy trunk tags/26.8.26`, one commit for both. Verified by `svn export`ing the committed tag
 back from the server and digest-comparing all 41 files against the local build — not by reading
-the commit output. The password came from `pbpaste` over `--password-from-stdin`. It was not in
-the login keychain at the time and `~/.subversion/auth/svn.simple/` was empty, so finding it cost
-a detour through `profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password`; it was
-stored in the keychain immediately afterwards, and `AGENTS.md` carries the lookup. The next
-release does not repeat that hunt.
+the commit output. The SVN password went in over `--password-from-stdin`, never as an argument.
 
 ### The 26.8.25 switchover, verified against the database rather than against itself
 
@@ -519,7 +515,7 @@ three live suites passed 37 checks between them, each migrating, verifying and r
 
 ### The 26.8.23 deploy, where "unchanged" was the whole point and was checked in the database first
 
-Deployed 2026-08-15 from the MacBook. **6 files, 11 chunks, every chunk first time, 0
+Deployed 2026-08-15. **6 files, 11 chunks, every chunk first time, 0
 mismatching**, `160/160` URLs semantically identical and `0` non-200, `ver=26.8.22` before and
 `26.8.23` after. Eighteenth deploy with no failed chunk.
 
@@ -607,8 +603,8 @@ recipe, ahead of `plan`.
 
 ### The 26.8.22 deploy, the first that was SUPPOSED to change rendered bytes
 
-Deployed 2026-08-14 from the MacBook. `26.8.22` live on both assets, and the three URL spaces
-verified independently from the Windows desktop over HTTP after the push: **49/49 gallery
+Deployed 2026-08-14. `26.8.22` live on both assets, and the three URL spaces
+verified independently from a second machine over HTTP after the push: **49/49 gallery
 permalinks, 2/2 albums and 5 of 40 sampled tag archives answer 200**, every gallery renders
 photographs, and **not one page carries an anonymous `<style>` element**.
 

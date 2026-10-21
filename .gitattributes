@@ -12,7 +12,7 @@
 #   written with `\n`. On a CRLF checkout every MULTI-LINE mutation matches nothing. The harness
 #   is honest about it -- it reports BROKEN rather than SURVIVED, which is the whole reason that
 #   rule exists -- but the effect is that most of the suite's proof of falsifiability quietly
-#   stops running on that machine. Measured on the Windows desktop, 2026-08-14: single-line
+#   stops running on that machine. Measured on a Windows machine, 2026-08-14: single-line
 #   mutations killed their checks, multi-line ones all reported `target text occurs 0 times`.
 #
 # Git for Windows ships `core.autocrlf=true` in its system config, so a fresh clone there gets a

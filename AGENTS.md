@@ -261,8 +261,8 @@ the EXIF area off and four checks go red instead of vanishing.
     re-scored every check after it, in the direction nobody audits.
   - *CI, which is the whole point* — five PHP versions, the generator run twice and `cmp`d, and
     `git diff --exit-code` after the mutation pass.
-- *PHP versions: test the one the site runs, not the one the Mac has* — the site is 8.2.30 and
-  this Mac is 8.5. A version that is not installed is `[SKIP]`, never a pass, and a run with no
+- *PHP versions: test the one the site runs, not the one the development machine has* — the site is 8.2.30 and
+  the development machine has 8.5. A version that is not installed is `[SKIP]`, never a pass, and a run with no
   summary line is `[BROKEN]`.
 - *A public read endpoint cannot be gated on a nonce, and the harness said it could (26.8.19)* —
   a stub returning `true` unconditionally models code that cannot get the answer wrong, and
@@ -278,7 +278,7 @@ bash tools/devenv.sh reset     # restore to the snapshot, in seconds
 bash tools/devenv.sh status    # what is running, and which post types the rows are under
 ```
 
-Lives at `~/Developer/wp-lichtbild`, outside this repo. WordPress **7.0.3** and PHP **8.2** to
+Lives outside this repo, where `tools/devenv.sh` puts it. WordPress **7.0.3** and PHP **8.2** to
 match the live site, MariaDB **10.11** to match its engine, and the plugin is symlinked in so
 an edit here is live there with nothing to sync.
 
