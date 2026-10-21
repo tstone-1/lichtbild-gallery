@@ -22,6 +22,7 @@ conversion somewhere in the site's history.
 import base64
 import json
 import pathlib
+import ssl
 import sys
 
 import phpserialize
@@ -42,8 +43,14 @@ if "host" not in cfg:
         "name, not wp-config.php's DB_HOST, which says localhost and cannot be reached."
     )
 
+# Verified TLS is required, not merely preferred. With no TLS argument pymysql attempts TLS,
+# accepts any certificate, and falls back to plaintext if the server offers none, and this
+# connection crosses the internet to the production database. An SSLContext makes pymysql
+# refuse a server without TLS and check the certificate and hostname. A host whose MySQL
+# certificate is self-signed names that certificate (or its CA) as "ca" in tests/.db.json.
 con = pymysql.connect(
     host=cfg["host"],
+    ssl=ssl.create_default_context(cafile=cfg.get("ca")),
     user=cfg["DB_USER"],
     password=cfg["DB_PASSWORD"],
     database=cfg["DB_NAME"],

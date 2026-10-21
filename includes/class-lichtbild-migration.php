@@ -89,11 +89,7 @@ class Lichtbild_Migration {
 			);
 		}
 
-		return array(
-			'version'  => Lichtbild_Config::VERSION,
-			'settings' => Lichtbild_Config::from_envira( $config, $post_id ),
-			'items'    => $items,
-		);
+		return Lichtbild_Repository::gallery_record( Lichtbild_Config::from_envira( $config, $post_id ), $items );
 	}
 
 	/**
@@ -110,10 +106,11 @@ class Lichtbild_Migration {
 	 * @param string   $failure    Error message template taking the post ID.
 	 * @param callable $builder    Builds a record from `(array $data, int $id)`, or null to skip.
 	 * @param string[] $errors     Errors, appended to.
+	 * @param int      $kept       Incremented for each record kept rather than reconverted.
 	 *
-	 * @return int|null Records written, or null when one could not be and nothing should move.
+	 * @return int|null Records in place, or null when one could not be written and nothing should move.
 	 */
-	private function convert( $post_type, $source_key, $target_key, $failure, callable $builder, array &$errors ) {
+	private function convert( $post_type, $source_key, $target_key, $failure, callable $builder, array &$errors, &$kept ) {
 		global $wpdb;
 
 		$written = 0;
@@ -140,6 +137,32 @@ class Lichtbild_Migration {
 			// alike. It is not one, and must not become one.
 			if ( null === $record ) {
 				continue;
+			}
+
+			// A record written by a conversion carries the digest of the Envira record it came
+			// from; one written by an editor does not, because `Lichtbild_Repository::store_gallery()`
+			// and `store_album()` build the envelope without it. That is what tells a migration
+			// run after a rollback which of the two it is looking at:
+			//
+			// - no Lichtbild record, or one carrying a digest: an unedited conversion. Converting
+			//   again is safe, and is how an edit made in Envira after the rollback arrives.
+			// - a Lichtbild record with no digest that differs from a fresh conversion: an edit made
+			//   in Lichtbild after the earlier migration (or a record written before 26.10.0, which
+			//   cannot say). Overwriting it is what this method did until 26.10.0, and it threw
+			//   away every such edit while the rollback screen promised that nothing would be lost.
+			//   It is kept, and counted so the screen can say so.
+			$record['source'] = self::source_digest( $data );
+			$existing         = get_post_meta( $id, $target_key, true );
+
+			if ( is_array( $existing ) && ! isset( $existing['source'] ) && ! empty( $existing['settings'] ) && is_array( $existing['settings'] ) ) {
+				$fresh = $record;
+				unset( $fresh['source'] );
+
+				if ( wp_json_encode( $existing ) !== wp_json_encode( $fresh ) ) {
+					$kept++;
+					$written++;
+					continue;
+				}
 			}
 
 			// `wp_slash()` for the same reason both editors need it: core's metadata layer
@@ -175,6 +198,17 @@ class Lichtbild_Migration {
 	}
 
 	/**
+	 * Identifies the Envira record a conversion was made from.
+	 *
+	 * @param array $data The `_eg_gallery_data` or `_eg_album_data` value.
+	 *
+	 * @return string An MD5 digest of the record's JSON encoding.
+	 */
+	private static function source_digest( array $data ) {
+		return md5( (string) wp_json_encode( $data ) );
+	}
+
+	/**
 	 * Builds the record Lichtbild stores for one album.
 	 *
 	 * @param array $data    The `_eg_album_data` value.
@@ -197,11 +231,7 @@ class Lichtbild_Migration {
 			$items[] = Lichtbild_Album_Config::item_from_envira( $gallery_id, is_array( $entry ) ? $entry : array() );
 		}
 
-		return array(
-			'version'  => Lichtbild_Album_Config::VERSION,
-			'settings' => Lichtbild_Album_Config::from_envira( $config ),
-			'items'    => $items,
-		);
+		return Lichtbild_Repository::album_record( Lichtbild_Album_Config::from_envira( $config ), $items );
 	}
 
 	/**
@@ -408,7 +438,7 @@ class Lichtbild_Migration {
 	 * option that every path out of this class then has to remember to clear. A stranding lock
 	 * is a worse failure than the race it prevents.
 	 *
-	 * @return array{galleries:int,albums:int,terms:int,converted:int,albums_converted:int,seo_keys:int,errors:string[],warnings:string[]}
+	 * @return array{galleries:int,albums:int,terms:int,converted:int,albums_converted:int,kept:int,seo_keys:int,errors:string[],warnings:string[]}
 	 */
 	public function migrate() {
 		global $wpdb;
@@ -419,6 +449,7 @@ class Lichtbild_Migration {
 			'terms'            => 0,
 			'converted'        => 0,
 			'albums_converted' => 0,
+			'kept'             => 0,
 			'seo_keys'         => 0,
 			'errors'           => array(),
 			// Separate from `errors` deliberately. An error means the migration failed and the
@@ -444,6 +475,7 @@ class Lichtbild_Migration {
 
 		// Convert the records first. Doing this before the post types move means a failure
 		// here leaves a site that is entirely unchanged rather than half-renamed.
+		$kept      = 0;
 		$converted = $this->convert(
 			Lichtbild_Repository::GALLERY_POST_TYPE,
 			Lichtbild_Repository::GALLERY_META,
@@ -451,7 +483,8 @@ class Lichtbild_Migration {
 			/* translators: %d: gallery post ID. */
 			__( 'Gallery %d could not be converted, so the migration was stopped before anything was renamed.', 'lichtbild-gallery' ),
 			array( self::class, 'build_record' ),
-			$result['errors']
+			$result['errors'],
+			$kept
 		);
 
 		if ( null === $converted ) {
@@ -472,7 +505,8 @@ class Lichtbild_Migration {
 			/* translators: %d: album post ID. */
 			__( 'Album %d could not be converted, so the migration was stopped before anything was renamed.', 'lichtbild-gallery' ),
 			array( self::class, 'build_album_record' ),
-			$result['errors']
+			$result['errors'],
+			$kept
 		);
 
 		if ( null === $converted ) {
@@ -480,6 +514,20 @@ class Lichtbild_Migration {
 		}
 
 		$result['albums_converted'] = $converted;
+		$result['kept']             = $kept;
+
+		if ( $kept > 0 ) {
+			$result['warnings'][] = sprintf(
+				/* translators: %d: number of galleries and albums. */
+				_n(
+					'%d gallery or album was edited in Lichtbild since an earlier migration, so its Lichtbild version was kept rather than converted again from Envira\'s record.',
+					'%d galleries and albums were edited in Lichtbild since an earlier migration, so their Lichtbild versions were kept rather than converted again from Envira\'s records.',
+					$kept,
+					'lichtbild-gallery'
+				),
+				$kept
+			);
+		}
 
 		$result['galleries'] = $this->move(
 			$wpdb->posts,
@@ -747,10 +795,12 @@ class Lichtbild_Migration {
 	/**
 	 * Reverses the migration.
 	 *
-	 * The converted records are deliberately left in place. They are inert once the schema
-	 * option is back to 1 — the repository only consults them when it finds them, and after
-	 * a rollback the post type no longer matches — and keeping them means migrating again
-	 * costs nothing and cannot lose an edit made in between.
+	 * The converted records are deliberately left in place. Once the schema option is back to 1
+	 * the repository reads Envira's record wherever one exists, so an edit made in Lichtbild
+	 * since the migration is not shown while the site is rolled back. It is not lost either:
+	 * `convert()` keeps a Lichtbild record that was edited rather than overwriting it, so
+	 * migrating again brings the edit back. A gallery created in Lichtbild has no Envira record
+	 * and keeps rendering from its own throughout.
 	 *
 	 * @return array{galleries:int,albums:int,terms:int,errors:string[]}
 	 */

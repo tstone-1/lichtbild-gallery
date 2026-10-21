@@ -11,12 +11,8 @@ is listed at `wordpress.org/plugins/lichtbild-gallery/`. The current release is 
 on the site and in the directory since 2026-09-25; the dated history is under *Submitting to
 wordpress.org* below.
 
-> Until 2026-08-22 this paragraph said the repository was **still private and nothing had been
-> submitted**, five days after both stopped being true, while a later section in this same file
-> recorded the submission and two review rounds. That is not harmless stale prose: the
-> confidentiality and account rules branch on visibility, and this is the first thing anyone
-> reads. A status line carries a date because it expires — when this one and GitHub disagree,
-> `gh repo view tstone-1/lichtbild-gallery --json visibility` is the answer and this is the cache.
+- *A status line carries a date because it expires* — this paragraph once said private and
+  unsubmitted five days after both stopped being true; `gh repo view` is the answer.
 
 The two rules below are what being public makes non-negotiable rather than tidy:
 
@@ -33,8 +29,9 @@ The two rules below are what being public makes non-negotiable rather than tidy:
 > 26.8.23, and Lichtbild Gallery from 26.8.24.** Tivira went because it was one letter from
 > Envira's in the same product category; Atelier went because wordpress.org pended the
 > submission over it, three published plugins in that directory already leading with the word.
-> This paragraph is the only place the former names appear as themselves. Everywhere else —
-> this file, the changelog, the deploy records — names everything by its *current* identifiers,
+> In this file and the deploy records this paragraph is the only place the former names appear
+> as themselves; the changelog's two rename entries and the code that still accepts their old
+> deep links are the other two. Everywhere else names everything by its *current* identifiers,
 > including in entries describing releases that shipped under a former name, because the
 > alternative is documentation that cannot be grepped against the code it documents. Read a
 > class or file name in an old entry as "the thing now called that". Dates, counts and measured
@@ -113,6 +110,8 @@ changes when its old records are deleted, and its published URLs must not change
 - *Recovering from a migration that dies half-way* — there is no transaction. Rollback is gated
   on the rows and never on the flag, because the flag is exactly what a half-finished run gets
   wrong; and `(int)` on `$wpdb->update()` turns a failed statement into "nothing needed doing".
+- *Re-migration after a rollback, and what the `source` digest is for (26.10.0)* — a second
+  migration overwrote every Lichtbild edit; a record with no digest is an edit and is kept.
 - *Registration must not defer to Envira once the data has moved* — `register_types()` standing
   aside while Envira is active is right up to the migration and wrong after it — nothing else
   registers `lichtbild_gallery`. The guard is `! $migrated && ...`.
@@ -230,8 +229,8 @@ php tests/make-fixture.php
 php tests/render-test.php tests/fixture-synthetic.json
 ```
 
-238 checks over 51 galleries and 529 rendered items. Each is reported with the **population
-it examined**.
+268 checks; on the live fixture they cover 51 galleries and 529 rendered items. Each is
+reported with the **population it examined**.
 
 That last property needs `Checks::expect()` to be true, and it is worth understanding why.
 A check only exists once an assertion runs, so a conditional area — EXIF, say — does not
@@ -286,7 +285,7 @@ an edit here is live there with nothing to sync.
 It exists for the five things the stub suite structurally cannot reach: real `$wpdb` against
 the production engine, real rewrite-rule generation, real object and term caches, the real
 Envira plugin to coexist with, and the admin screen actually rendering. It does not replace
-the stub suite — that runs in seconds with no infrastructure and covers 220 properties.
+the stub suite — that runs in seconds with no infrastructure and covers 268 checks.
 
 **Deeper entries — full text in [`docs/lessons.md`](docs/lessons.md):**
 

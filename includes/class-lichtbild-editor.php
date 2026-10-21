@@ -781,21 +781,9 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 			return;
 		}
 
-		// `wp_slash()` because core's metadata layer unslashes the value it is handed — correct
-		// for the raw `$_POST` it normally receives, wrong for one already unslashed above. A
-		// caption reading `C:\Photos` would otherwise be stored as `C:Photos`, losing a
-		// backslash per save and never reporting it.
-		update_post_meta(
-			$post_id,
-			Lichtbild_Repository::GALLERY_META_V2,
-			wp_slash(
-				array(
-					'version'  => Lichtbild_Config::VERSION,
-					'settings' => Lichtbild_Config::sanitize( $settings ),
-					'items'    => $collected['items'],
-				)
-			)
-		);
+		// The values were unslashed above; `store_gallery()` slashes them again for the metadata
+		// layer, and says why.
+		Lichtbild_Repository::store_gallery( $post_id, Lichtbild_Config::sanitize( $settings ), $collected['items'] );
 
 		// After the gallery, never during the collect. Tags are terms on the attachment, so
 		// writing them is a second write to a second table: doing it while assembling the
@@ -829,6 +817,22 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 		$items = array();
 		$tags  = array();
 
+		// The images this gallery already holds. The `read_post` check below exists to stop a
+		// submission naming somebody else's attachment, and an image already in the record was
+		// put there by someone allowed to; refusing it as well removed it on the next save by
+		// anyone who could not read it -- an Author saving a gallery that holds an image attached
+		// to another user's draft -- while the screen showed the row and said nothing.
+		$stored = get_post_meta( $post_id, Lichtbild_Repository::GALLERY_META_V2, true );
+		$held   = array();
+
+		if ( is_array( $stored ) && isset( $stored['items'] ) && is_array( $stored['items'] ) ) {
+			foreach ( $stored['items'] as $stored_item ) {
+				if ( is_array( $stored_item ) && isset( $stored_item['id'] ) && (int) $stored_item['id'] > 0 ) {
+					$held[ (int) $stored_item['id'] ] = true;
+				}
+			}
+		}
+
 		foreach ( $this->ordered_rows( $submitted, $order ) as $row ) {
 			$record = Lichtbild_Item::sanitize_record( $row );
 
@@ -836,16 +840,19 @@ class Lichtbild_Editor extends Lichtbild_Metabox_Editor {
 				continue;
 			}
 
-			// Existing posts must be readable attachments. Missing attachments retain their frozen
-			// URLs, which keeps migrated galleries usable after a media-library deletion.
-			$type = $record['id'] > 0 ? get_post_type( $record['id'] ) : false;
-			if ( $type && ( 'attachment' !== $type || ! current_user_can( 'read_post', $record['id'] ) ) ) {
+			// Existing posts must be attachments, and new ones readable by whoever adds them.
+			// Missing attachments retain their frozen URLs, which keeps migrated galleries usable
+			// after a media-library deletion.
+			$type     = $record['id'] > 0 ? get_post_type( $record['id'] ) : false;
+			$readable = $type && current_user_can( 'read_post', $record['id'] );
+			if ( $type && ( 'attachment' !== $type || ( ! $readable && ! isset( $held[ $record['id'] ] ) ) ) ) {
 				continue;
 			}
 
 			$items[] = $record;
 
-			if ( $record['id'] > 0 && isset( $row['tags'] ) && is_string( $row['tags'] ) ) {
+			// Tags are terms on the attachment itself, so only someone who can read it writes them.
+			if ( $record['id'] > 0 && ( $readable || ! $type ) && isset( $row['tags'] ) && is_string( $row['tags'] ) ) {
 				// An attachment has one tag set, even when the gallery shows it twice.
 				// Refuse ambiguity before either the record or the shared terms are written.
 				if ( isset( $tags[ $record['id'] ] ) && $tags[ $record['id'] ] !== $row['tags'] ) {

@@ -45,7 +45,9 @@ class Lichtbild_Exif {
 	public static function fields( $attachment_id, array $enabled, $date_format = '' ) {
 		$attachment_id = (int) $attachment_id;
 
-		if ( $attachment_id <= 0 || empty( $enabled ) ) {
+		// The same rule `Lichtbild_Item` applies to every other metadata read since 26.9.0: an item's
+		// ID is only an attachment if the post says so, and a gallery record can name any post.
+		if ( $attachment_id <= 0 || empty( $enabled ) || 'attachment' !== get_post_type( $attachment_id ) ) {
 			return array();
 		}
 

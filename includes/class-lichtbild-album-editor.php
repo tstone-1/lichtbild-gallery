@@ -517,21 +517,12 @@ class Lichtbild_Album_Editor extends Lichtbild_Metabox_Editor {
 			: array();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
-		// `wp_slash()` because `update_post_meta()` unslashes what it is given — core's metadata
-		// layer calls `wp_unslash()` on the value, which is right for the raw `$_POST` WordPress
-		// normally hands it and wrong for the value we have already unslashed above. Without
-		// this, a caption reading `C:\Photos` is stored as `C:Photos`: every backslash silently
-		// eaten, once per save.
-		update_post_meta(
+		// The values were unslashed above; `store_album()` slashes them again for the metadata
+		// layer, for the reason `Lichtbild_Repository::store_gallery()` gives.
+		Lichtbild_Repository::store_album(
 			$post_id,
-			Lichtbild_Repository::ALBUM_META_V2,
-			wp_slash(
-				array(
-					'version'  => Lichtbild_Album_Config::VERSION,
-					'settings' => Lichtbild_Album_Config::sanitize( $settings ),
-					'items'    => $this->collect_items( $submitted, $order, $post_id ),
-				)
-			)
+			Lichtbild_Album_Config::sanitize( $settings ),
+			$this->collect_items( $submitted, $order, $post_id )
 		);
 	}
 

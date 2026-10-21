@@ -99,6 +99,22 @@ esac
   && cd wrong && zip -qr "$TMP/wrong.zip" somethingelse )
 expect "an archive without the plugin root is refused" 2 "has no lichtbild-gallery/ directory" "$TMP/wrong.zip"
 
+# 7. a SERVER_EXTRA file missing from the tree is an unknown shipped set, not a clean comparison.
+#    Until the listing was taken into a variable first, `done < <(shipped_files) || return` lost
+#    this failure in the process substitution: the error printed and the channels still agreed.
+#    Run from a copy of the tracked tree, so the checkout under test is never touched.
+tree="$TMP/tree"; mkdir -p "$tree"
+( cd "$ROOT" && git ls-files -z | tar --null -T - -cf - ) | tar -xf - -C "$tree"
+git -C "$tree" init --quiet
+git -C "$tree" add -A
+rm "$tree/languages/lichtbild-gallery-de_DE.mo"
+out="$(bash "$tree/tools/deploy.sh" channels --against "$base" 2>&1)"
+code=$?
+case "$code:$out" in
+	2:*"SERVER_EXTRA names languages/lichtbild-gallery-de_DE.mo"*) ok "a missing SERVER_EXTRA file fails the comparison" ;;
+	*) bad "a missing SERVER_EXTRA file: exit $code"; printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
 echo
 if [ "$fails" -eq 0 ]; then
 	echo "deploy channels: every verdict reachable"

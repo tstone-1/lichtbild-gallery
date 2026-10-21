@@ -281,22 +281,12 @@ class Lichtbild_Block {
 
 		$post_id = (int) $post_id;
 
-		// The same record shape `Lichtbild_Editor::save()` writes, built through the same
-		// sanitiser — so a new gallery is indistinguishable from one made on the gallery
-		// screen, and there is one definition of what an item record holds. An item carrying
+		// The same writer `Lichtbild_Editor::save()` uses, with items built through the same
+		// sanitiser, so a new gallery is indistinguishable from one made on the gallery
+		// screen, and there is one definition of what a record holds. An item carrying
 		// only an attachment ID is complete: title, alt, dimensions and every URL are resolved
 		// from the attachment at render time, which is what keeps them current.
-		$stored = update_post_meta(
-			$post_id,
-			Lichtbild_Repository::GALLERY_META_V2,
-			wp_slash(
-				array(
-					'version'  => Lichtbild_Config::VERSION,
-					'settings' => Lichtbild_Config::defaults(),
-					'items'    => $this->items( $ids ),
-				)
-			)
-		);
+		$stored = Lichtbild_Repository::store_gallery( $post_id, Lichtbild_Config::defaults(), $this->items( $ids ) );
 
 		// A post that exists with no record is the one state this endpoint must not leave
 		// behind, and it is worse than the insert having failed outright. `Lichtbild_Repository`

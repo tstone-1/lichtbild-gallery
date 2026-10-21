@@ -30,4 +30,15 @@ with tempfile.TemporaryDirectory(prefix="lichtbild-layout-") as folder:
         assert mobile["basis"] == 220, mobile
         assert 0 < mobile["height"] < desktop["height"], (desktop, mobile)
         print("[OK] actual gallery CSS: desktop basis 700, mobile basis 220; mobile height decreases")
+        # A row already below the mobile height must not be raised to it. The renderer writes the
+        # row as an inline custom property on the wrap, so the test changes it there.
+        page.locator('[style*="--lichtbild-row"]').first.evaluate(
+            "el => el.style.setProperty('--lichtbild-row', '60')"
+        )
+        small_mobile = geometry()
+        page.set_viewport_size({"width": 1000, "height": 800})
+        small_desktop = geometry()
+        assert small_desktop["basis"] == 120, small_desktop
+        assert small_mobile["basis"] == 120, small_mobile
+        print("[OK] a 60px row stays 60px on a narrow screen: basis 120 on both")
         browser.close()

@@ -15,8 +15,12 @@ curl() {
     [ "$1" = --netrc-file ] && [ -s "$2" ]
 }
 shipped_files() { echo lichtbild-gallery.php; }
+# Counted as they run, and the total is asserted at the end: a case that stops running would
+# otherwise leave a hand-kept starting count, and the summary, exactly as they were.
+cases=0
 fails=0
 for call in netrc ftp cmd_audit cmd_plan; do
+    cases=$((cases + 1))
     if "$call" > "$WORK/output" 2>&1; then
         echo "[FAIL] $call accepted an unavailable keychain"; fails=$((fails + 1))
     elif [ -e "$WORK/netrc" ] || [ -e "$WORK/curl-calls" ]; then
@@ -26,6 +30,7 @@ for call in netrc ftp cmd_audit cmd_plan; do
     fi
 done
 UNLOCKED=1
+cases=$((cases + 1))
 if ftp && ftp && [ "$(wc -c < "$WORK/keychain-calls" | tr -d '[:space:]')" = 5 ] &&
     [ "$(wc -c < "$WORK/curl-calls" | tr -d '[:space:]')" = 2 ]; then
     echo '[OK] unlocking retries the lookup and caches only successful credentials'
@@ -38,7 +43,6 @@ curl() {
     printf '%s\n' "$RESPONSE"
     return "$CURL_STATUS"
 }
-cases=5
 for spec in '0 0 0' '0 123 123' '78 none -1' '56 none unreadable' '67 none unreadable' '56 123 unreadable' '0 none unreadable'; do
     rm -f "$WORK/ftp-auth-failed"
     read -r CURL_STATUS length expected <<< "$spec"
@@ -85,5 +89,6 @@ for call in cmd_audit cmd_plan; do
         echo "[FAIL] $call mishandled a failed connection"; fails=$((fails + 1))
     fi
 done
-echo "credential and connection tests: $cases, failing: $fails"
-[ "$fails" -eq 0 ]
+expected=15
+echo "credential and connection tests: $cases of $expected, failing: $fails"
+[ "$fails" -eq 0 ] && [ "$cases" -eq "$expected" ]

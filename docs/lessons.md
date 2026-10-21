@@ -2624,3 +2624,77 @@ WordPress on its own ports, installs the plugin **from the directory**, and `fre
   loaded. Holds the control that reactivation alone does **not** fix it, four ways the new
   harness made correct code look broken (a summary that counted zero under six failures, a
   themeless site answering 200 with an empty body), and why this environment cannot be in CI.
+
+## A status line carries a date because it expires
+
+Moved verbatim from the top of `AGENTS.md` in 26.10.0, when that file reached its ceiling.
+
+Until 2026-08-22 this paragraph said the repository was **still private and nothing had been
+submitted**, five days after both stopped being true, while a later section in this same file
+recorded the submission and two review rounds. That is not harmless stale prose: the
+confidentiality and account rules branch on visibility, and this is the first thing anyone
+reads. A status line carries a date because it expires — when this one and GitHub disagree,
+`gh repo view tstone-1/lichtbild-gallery --json visibility` is the answer and this is the cache.
+
+## Re-migration after a rollback, and what the `source` digest is for (26.10.0)
+
+**A migration run after a rollback destroyed every edit made in Lichtbild between the two.**
+`convert()` rebuilt each `_lichtbild_gallery` and `_lichtbild_album` from Envira's record and wrote
+it unconditionally, while the `rollback()` docblock said keeping the converted records meant
+migrating again "cannot lose an edit made in between" and the screen said rolling back "restores
+exactly what was there". The suite had `rollback leaves the converted records in place`, which is
+true and beside the point: nothing ever migrated twice with an edit in between. Found by an
+independent review on 2026-10-20, reachable on the live site from the day it migrated.
+
+**"Never overwrite" is the obvious fix and it is wrong.** The reason to roll back is to go back to
+Envira, so an edit made in Envira afterwards is the other realistic case, and never overwriting
+loses that one instead. The two cases have to be told apart, which is what the `source` key does:
+
+- A conversion writes `source`, an MD5 of the Envira record it was made from.
+- `Lichtbild_Repository::store_gallery()` and `store_album()`, the only writers the editors and
+  block creation use, build the envelope **without** it. So an edit removes the digest, and that
+  absence is the signal. **Anything that writes a record must not copy `source` forward**; a writer
+  that preserved it would make every later edit look like an unedited conversion and be
+  overwritten again.
+- On a migration: no record, or one carrying a digest, is converted again (an Envira edit arrives).
+  A record with no digest that differs from a fresh conversion is kept, counted in `kept`, and the
+  result carries one warning saying so.
+- **The ambiguity that remains is in records written before 26.10.0**, which carry no digest
+  either. One that differs from a fresh conversion is kept, because a Lichtbild edit is the likely
+  explanation on a site whose Envira plugin is deleted, and the warning makes the decision visible.
+  If such a site reinstalls Envira and edits there after a rollback, those edits lose to the kept
+  record. The digest cannot be reconstructed for them, so this is recorded rather than fixed.
+
+The same review found the second half: a gallery created in Lichtbild after the migration has no
+Envira record, so after a rollback the reader refused its own record and the gallery rendered
+nothing. `build_gallery()` and `build_album()` now read a Lichtbild record on an unmigrated site
+when no Envira record exists. That does not reopen the "two sources of truth" rule above them,
+because with one record there is nothing to disagree with.
+
+**Two things in the suite had to change to see it, and both are this project's recurring shape.**
+The clean-run control for the auxiliary warnings asserted `empty( warnings )`; galleries edited
+earlier in the suite now correctly add one, so the control counts it. And its two siblings asked
+for "some warning", which the new one satisfied alone: mutation `AUX1` survived until both counted
+warnings against `kept`. The uninstall test's `$wpdb` answered every `wp_options` query with an
+empty list, so a transient family uninstall did not list (the editors' `*_nonce_incomplete_*`,
+added in 26.9.0) was unobservable; it now evaluates the query's `LIKE` patterns, and `UN1` proves it.
+
+## The same review's tooling findings (26.10.0)
+
+- **The pre-push hook used `git grep -E` for .NET patterns.** Six of the 31 use `\b` or `\s`, which
+  POSIX ERE does not have, so on Apple Git those could never match and the hook printed OK. It uses
+  `-P` now and refuses a git without PCRE. It also never read `$ForbiddenCommitMessagePatterns`, so
+  AI trailers passed; this repo's `core.hooksPath=.githooks` means the shared installer's hook in
+  `.git/hooks` never runs here, so the tracked hook is the only one.
+- **`deploy.sh push` published the working tree.** `build-zip.sh` builds from HEAD; `push` now
+  refuses a dirty or untracked upload file unless `LICHTBILD_DEPLOY_DIRTY=1`, and refuses when git
+  cannot answer. An interrupted `tests/mutations.php` run, which edits `includes/` in place, was the
+  concrete case.
+- **The DB tools now require verified TLS.** pymysql with no `ssl` argument tries TLS, accepts any
+  certificate and falls back to plaintext. If the host's MySQL certificate is self-signed, the first
+  run will refuse to connect until `tests/.db.json` names it as `"ca"`.
+- **The mobile row cap was computed on the wrong element.** `--lichtbild-effective-row` was set on
+  `.lichtbild-wrap`, but the configured row is an inline property on the grid inside it, so at the
+  wrap `var(--lichtbild-row)` was the default 150 and `min()` there would still have capped every
+  gallery at 110. A custom property's `var()` resolves where it is declared, not where it is used.
+  It is declared on the item now, and `tests/layout-test.py` has a 60px case.

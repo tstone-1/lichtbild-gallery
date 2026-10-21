@@ -4170,6 +4170,132 @@ $site->galleries[ $authority_id ]['lichtbild'] = Lichtbild_Migration::build_reco
 	$authority_id
 );
 
+// Migrating again after a rollback converted every Envira record afresh and overwrote what was
+// there, so an edit made in Lichtbild between the two migrations was destroyed -- while the
+// rollback docblock and the screen both said it could not be. Until 26.10.0 nothing here
+// migrated twice with an edit in between, which is the only way to see it.
+//
+// Three directions, because a fix for the first is trivially "never overwrite", and that loses
+// the second: an edit made in Envira after the rollback has to arrive on the next migration.
+// The third is the gallery that never had an Envira record at all.
+$checks->expect(
+	're-migrating keeps an edit made in Lichtbild',
+	're-migrating brings in an edit made in Envira',
+	'a gallery created in Lichtbild still renders after a rollback',
+	'an album created in Lichtbild still renders after a rollback'
+);
+
+$remigrate_ids = array();
+
+foreach ( array_keys( $pre_migration ) as $candidate_id ) {
+	$candidate = isset( $site->galleries[ $candidate_id ]['data']['gallery'] ) ? $site->galleries[ $candidate_id ]['data']['gallery'] : array();
+
+	if ( $candidate_id !== $editor_id && is_array( $candidate ) && count( $candidate ) > 0 ) {
+		$remigrate_ids[] = $candidate_id;
+	}
+
+	if ( count( $remigrate_ids ) === 2 ) {
+		break;
+	}
+}
+
+if ( 2 === count( $remigrate_ids ) && ! $settings->has_migrated() ) {
+	list( $lichtbild_edited, $envira_edited ) = $remigrate_ids;
+
+	$saved_lichtbild = $site->galleries[ $lichtbild_edited ]['lichtbild'];
+	$saved_envira    = $site->galleries[ $envira_edited ]['data'];
+	$saved_converted = $site->galleries[ $envira_edited ]['lichtbild'];
+
+	$first = $migration->migrate();
+
+	// An edit through the same writer the gallery editor uses. Guarded, because a first
+	// migration that failed leaves no record to edit, and a fatal here would pre-empt the very
+	// check that should report it.
+	$edited_record = isset( $site->galleries[ $lichtbild_edited ]['lichtbild'] ) ? $site->galleries[ $lichtbild_edited ]['lichtbild'] : null;
+
+	if ( is_array( $edited_record ) && is_array( $edited_record['settings'] ?? null ) && isset( $edited_record['items'][0] ) ) {
+		$edited_record['items'][0]['caption'] = 'Edited in Lichtbild after the migration';
+		Lichtbild_Repository::store_gallery( $lichtbild_edited, $edited_record['settings'], $edited_record['items'] );
+	}
+
+	$migration->rollback();
+
+	// An edit in Envira, on a gallery whose Lichtbild record is an unedited conversion.
+	$envira_key = array_key_first( $site->galleries[ $envira_edited ]['data']['gallery'] );
+	$site->galleries[ $envira_edited ]['data']['gallery'][ $envira_key ]['caption'] = 'Edited in Envira after the rollback';
+
+	$second = $migration->migrate();
+
+	$checks->assert(
+		're-migrating keeps an edit made in Lichtbild',
+		empty( $first['errors'] ) && empty( $second['errors'] )
+			&& 'Edited in Lichtbild after the migration' === ( $site->galleries[ $lichtbild_edited ]['lichtbild']['items'][0]['caption'] ?? null )
+			&& (int) $second['kept'] > 0
+			&& ! empty( $second['warnings'] ),
+		'caption: ' . var_export( $site->galleries[ $lichtbild_edited ]['lichtbild']['items'][0]['caption'] ?? null, true )
+			. ', kept: ' . (int) $second['kept'] . ', errors: ' . count( $second['errors'] )
+	);
+
+	$envira_item = null;
+
+	foreach ( (array) ( $site->galleries[ $envira_edited ]['lichtbild']['items'] ?? array() ) as $envira_row ) {
+		if ( (int) $envira_row['id'] === (int) $envira_key ) {
+			$envira_item = $envira_row;
+			break;
+		}
+	}
+
+	$checks->assert(
+		're-migrating brings in an edit made in Envira',
+		null !== $envira_item && 'Edited in Envira after the rollback' === $envira_item['caption'],
+		'caption: ' . var_export( null === $envira_item ? null : $envira_item['caption'], true )
+	);
+
+	$migration->rollback();
+
+	// Created while migrated, so it has no Envira record; the rollback renamed its row with the rest.
+	$created_id                     = 999002;
+	$site->galleries[ $created_id ] = array(
+		'id'        => $created_id,
+		'title'     => 'Created in Lichtbild',
+		'status'    => 'publish',
+		'name'      => 'created-in-lichtbild',
+		'lichtbild' => Lichtbild_Repository::gallery_record( Lichtbild_Config::defaults(), (array) ( $saved_lichtbild['items'] ?? array( array( 'id' => 0, 'src' => 'https://example.com/a.jpg' ) ) ) ),
+	);
+	$site->build_tables();
+
+	$created = ( new Lichtbild_Repository() )->gallery( $created_id );
+
+	$checks->assert(
+		'a gallery created in Lichtbild still renders after a rollback',
+		null !== $created && $created->count() > 0,
+		null === $created ? 'the rolled-back site found no gallery' : $created->count() . ' items'
+	);
+
+	$created_album_id                   = 999003;
+	$site->albums[ $created_album_id ] = array(
+		'id'        => $created_album_id,
+		'title'     => 'Album created in Lichtbild',
+		'status'    => 'publish',
+		'name'      => 'album-created-in-lichtbild',
+		'lichtbild' => Lichtbild_Repository::album_record( Lichtbild_Album_Config::defaults(), array( array( 'id' => $lichtbild_edited ) ) ),
+	);
+	$site->build_tables();
+
+	$checks->assert(
+		'an album created in Lichtbild still renders after a rollback',
+		null !== ( new Lichtbild_Repository() )->album( $created_album_id ),
+		'the rolled-back site found no album'
+	);
+
+	unset( $site->galleries[ $created_id ], $site->albums[ $created_album_id ] );
+	$site->build_tables();
+
+	$site->galleries[ $lichtbild_edited ]['lichtbild'] = $saved_lichtbild;
+	$site->galleries[ $envira_edited ]['data']         = $saved_envira;
+	$site->galleries[ $envira_edited ]['lichtbild']    = $saved_converted;
+}
+
 // A failing statement must not read as "nothing needed doing". $wpdb->update() returns false
 // on error and 0 when no row matched, and casting both to int makes a failed migration look
 // like a successful one — it would go on to write the schema option and report success.
@@ -4479,7 +4605,7 @@ if ( ! $settings->has_migrated() && ! $settings->envira_is_active() ) {
 
 	$checks->assert(
 		'a failed standalone copy is reported and the galleries stay findable',
-		! empty( $standalone_failed['warnings'] )
+		count( $standalone_failed['warnings'] ) > ( (int) $standalone_failed['kept'] > 0 ? 1 : 0 )
 			&& empty( $standalone_failed['errors'] )
 			&& true === $standalone_migrated,
 		'warnings: ' . count( $standalone_failed['warnings'] ) . ', errors: '
@@ -4497,7 +4623,7 @@ if ( ! $settings->has_migrated() && ! $settings->envira_is_active() ) {
 
 	$checks->assert(
 		'a failed seo copy is reported and claims no copied keys',
-		! empty( $seo_failed['warnings'] )
+		count( $seo_failed['warnings'] ) > ( (int) $seo_failed['kept'] > 0 ? 1 : 0 )
 			&& 0 === (int) $seo_failed['seo_keys']
 			&& empty( $seo_failed['errors'] )
 			&& true === $seo_migrated,
@@ -4505,8 +4631,14 @@ if ( ! $settings->has_migrated() && ! $settings->envira_is_active() ) {
 			. (int) $seo_failed['seo_keys'] . ', migrated: ' . var_export( $seo_migrated, true )
 	);
 
+	// Both count warnings rather than test for any: galleries edited earlier in this suite make
+	// every run here add one more, that their Lichtbild version was kept, and a check that only
+	// asked for "some warning" was satisfied by that one alone (mutation AUX1 survived it).
+	//
 	// The control, and without it both assertions above are satisfied by a migration that always
-	// warns. A clean run has to warn about nothing and report the keys it really copied.
+	// warns. A clean run has to warn about nothing and report the keys it really copied -- nothing
+	// except the one warning that galleries edited earlier in this suite kept their Lichtbild
+	// version, which is correct on this fixture and is counted rather than filtered out by text.
 	$aux_reset();
 	$aux_clean = ( new Lichtbild_Migration( $settings ) )->migrate();
 
@@ -4514,10 +4646,11 @@ if ( ! $settings->has_migrated() && ! $settings->envira_is_active() ) {
 
 	$checks->assert(
 		'neither is reported when both writes land',
-		empty( $aux_clean['warnings'] )
+		count( $aux_clean['warnings'] ) === ( (int) $aux_clean['kept'] > 0 ? 1 : 0 )
 			&& empty( $aux_clean['errors'] )
 			&& (int) $aux_clean['seo_keys'] > 0,
-		'warnings: ' . count( $aux_clean['warnings'] ) . ', seo_keys: ' . (int) $aux_clean['seo_keys']
+		'warnings: ' . count( $aux_clean['warnings'] ) . ', kept: ' . (int) $aux_clean['kept']
+			. ', seo_keys: ' . (int) $aux_clean['seo_keys']
 	);
 }
 
@@ -6294,9 +6427,24 @@ $checks->assert( 'gallery saves refuse unreadable attachments', empty( $site->ga
 $site->capability_overrides['read_post:501'] = true;
 $audit_editor->save( 9001 );
 $checks->assert( 'gallery saves accept readable shared attachments', 501 === ( $site->galleries[9001]['lichtbild']['items'][0]['id'] ?? 0 ) );
+// Now held by the gallery: put there by someone who could read it, so a save by someone who
+// cannot keeps it rather than silently removing a row the screen still shows.
+$site->capability_overrides['read_post:501'] = false;
+$audit_editor->save( 9001 );
+$checks->assert( 'gallery saves keep an image the gallery already holds', 501 === ( $site->galleries[9001]['lichtbild']['items'][0]['id'] ?? 0 ) );
+$site->capability_overrides['read_post:501'] = true;
 $_POST['lichtbild_items']['i0']['id'] = 77777;
 $audit_editor->save( 9001 );
 $checks->assert( 'gallery saves retain deleted attachment fallback URLs', 'https://example.test/dummy.jpg' === ( $site->galleries[9001]['lichtbild']['items'][0]['src'] ?? '' ) );
+
+// EXIF is attachment metadata too, and was the one read outside that rule until 26.10.0. The
+// stub keys metadata by ID whatever the post type, so a non-attachment carrying some is exactly
+// the case the gate exists for; the real attachment is the control.
+$site->attachments[9002]['data'] = array( 'image_meta' => array( 'iso' => '400' ) );
+$site->attachments[501]['data']  = array( 'image_meta' => array( 'iso' => '400' ) );
+$checks->assert( 'exif reads only attachments',
+	array() === Lichtbild_Exif::fields( 9002, array( 'iso' ) ) && array() !== Lichtbild_Exif::fields( 501, array( 'iso' ) ) );
+unset( $site->attachments[9002]['data'], $site->attachments[501]['data'] );
 
 // A poisoned legacy record must also be harmless before its owner next edits it.
 $poisoned = new Lichtbild_Item( 9002, array( 'src' => 'https://example.test/dummy.jpg' ) );
@@ -6319,8 +6467,32 @@ $wpdb = new class extends Lichtbild_Test_wpdb {
 	public function get_var( $sql ) {
 		return $this->fail_counts ? null : parent::get_var( $sql );
 	}
+	// Answers the transient query from the option store by evaluating its LIKE patterns, so a
+	// pattern uninstall.php does not list leaves its transient behind and the check below sees it.
 	public function get_col( $sql ) {
-		return false !== strpos( $sql, 'FROM wp_options' ) ? array() : parent::get_col( $sql );
+		if ( false === strpos( $sql, 'FROM wp_options' ) ) {
+			return parent::get_col( $sql );
+		}
+		preg_match_all( "/LIKE '([^']*)'/", $sql, $likes );
+		$found = array();
+		foreach ( $likes[1] as $like ) {
+			$regex = '';
+			for ( $at = 0; $at < strlen( $like ); $at++ ) {
+				$char = $like[ $at ];
+				if ( '\\' === $char && $at + 1 < strlen( $like ) ) {
+					$regex .= preg_quote( $like[ ++$at ], '/' );
+				} else {
+					$regex .= '%' === $char ? '.*' : ( '_' === $char ? '.' : preg_quote( $char, '/' ) );
+				}
+			}
+			$regex = '/^' . $regex . '$/';
+			foreach ( array_keys( Lichtbild_Test_Site::$instance->options ) as $name ) {
+				if ( preg_match( $regex, (string) $name ) ) {
+					$found[] = $name;
+				}
+			}
+		}
+		return array_values( array_unique( $found ) );
 	}
 };
 defined( 'WP_UNINSTALL_PLUGIN' ) || define( 'WP_UNINSTALL_PLUGIN', 'lichtbild-gallery/lichtbild-gallery.php' );
@@ -6336,8 +6508,22 @@ $wpdb->fail_counts = true;
 require LICHTBILD_DIR . 'uninstall.php';
 $checks->assert( 'uninstall preserves identity when content cannot be counted', isset( $site->options['lichtbild_schema_version'], $site->options['lichtbild_slug_scheme'], $site->options['lichtbild_standalone'] ) );
 $wpdb->fail_counts = false;
+// Every option Lichtbild owns, named by the constants rather than copied from uninstall.php, so a
+// constant added without its uninstall line leaves an option behind. And every transient family
+// it writes, per user, with an unrelated option as the control that nothing else is removed.
+$owned_options = array();
+foreach ( ( new ReflectionClass( 'Lichtbild_Settings' ) )->getConstants() as $constant => $value ) {
+	if ( 0 === strpos( $constant, 'OPTION_' ) && 0 === strpos( (string) $value, 'lichtbild_' ) ) {
+		$owned_options[ $value ] = 1;
+	}
+}
+foreach ( array( 'lichtbild_migration_result_7', Lichtbild_Editor::NONCE . '_incomplete_7', Lichtbild_Album_Editor::NONCE . '_incomplete_7' ) as $transient ) {
+	$owned_options[ '_transient_' . $transient ]         = 1;
+	$owned_options[ '_transient_timeout_' . $transient ] = 1;
+}
+$site->options = $owned_options + array( 'unrelated_option' => 1 );
 require LICHTBILD_DIR . 'uninstall.php';
-$checks->assert( 'uninstall without owned content removes plugin options', array() === $site->options );
+$checks->assert( 'uninstall without owned content removes plugin options', array( 'unrelated_option' => 1 ) === $site->options && count( $owned_options ) >= 10, implode( ', ', array_keys( $site->options ) ) );
 $wpdb = $old_wpdb;
 $site = $audit_site;
 Lichtbild_Test_Site::$instance = $site;

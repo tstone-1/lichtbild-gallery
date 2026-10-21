@@ -20,7 +20,6 @@
 # The engineering record. readme.txt is the user-facing documentation; these are not.
 AGENTS.md
 AGENTS.local.md
-CLAUDE.md
 CHANGELOG.md
 TODO.md
 README.md

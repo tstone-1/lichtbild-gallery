@@ -267,6 +267,7 @@ function gridLink( id, width = 800, height = 600, key = '', caption = '' ) {
 function frontend( overrides = {} ) {
 	const requests = [];
 	const opened = [];
+	const instances = [];
 	const buttons = [ '', 'birds', 'flowers', 'constructor' ].map( slug => ( {
 		slug: slug,
 		pressed: slug === '' ? 'true' : 'false',
@@ -312,9 +313,13 @@ function frontend( overrides = {} ) {
 			} ) );
 		},
 		loadModule: () => Promise.resolve( { default: function ( options ) {
+			const handlers = {};
 			opened.push( options );
-			this.on = function () {};
+			instances.push( this );
+			// Handlers are kept so a test can close the lightbox the way PhotoSwipe does.
+			this.on = function ( name, handler ) { ( handlers[ name ] = handlers[ name ] || [] ).push( handler ); };
 			this.init = function () {};
+			this.destroy = function () { ( handlers.destroy || [] ).forEach( handler => handler() ); };
 		} } )
 	};
 	const importCall = 'import( settings.photoswipe )';
@@ -323,7 +328,7 @@ function frontend( overrides = {} ) {
 	}
 	vm.runInNewContext( source.replace( importCall, 'window.loadModule()' ), { window, document, URLSearchParams } );
 	return {
-		gallery: root.lichtbildGallery, root, wrap, buttons, requests, opened, window,
+		gallery: root.lichtbildGallery, root, wrap, buttons, requests, opened, instances, window,
 		clickTag( slug ) { bar.click( { target: { closest: () => buttons.find( button => button.slug === slug ) } } ); }
 	};
 }
@@ -406,6 +411,24 @@ async function checkFrontendState() {
 	f.requests[ 0 ].succeed( itemResult( 99 ) );
 	await settled();
 	check( 'changed server list still opens the clicked photograph', f.opened.length === 1 && f.opened[ 0 ].dataSource[ f.opened[ 0 ].index ].id === 10 );
+
+	// Opening waits for the import and, here, a slide request; a double click landed in that wait
+	// and stacked two lightboxes until 26.10.0.
+	f = frontend();
+	f.gallery.open( f.root.links[ 0 ] );
+	f.gallery.open( f.root.links[ 0 ] );
+	check( 'a second click while the lightbox loads sends no second request', f.requests.length === 1 );
+	f.requests[ 0 ].succeed( itemResult( 10 ) );
+	await settled();
+	check( 'a double click opens one lightbox', f.opened.length === 1 );
+	f.window.location.hash = '#lichtbild-1-i10';
+	f.gallery.restoreFromHash();
+	await settled();
+	check( 'a deep link cannot open a second lightbox over an open one', f.opened.length === 1 );
+	f.instances[ 0 ].destroy();
+	f.gallery.open( f.root.links[ 0 ] );
+	await settled();
+	check( 'the gallery opens again after its lightbox closes', f.opened.length === 2 );
 
 	f = frontend( { pagination: false } );
 	let slides = await f.gallery.slides();

@@ -89,16 +89,28 @@ DB_USER=root
 # The table prefix belongs to the PRODUCTION site, not to this environment -- the local database
 # is restored from a dump of it, so it inherits whatever prefix that site uses. That makes it a
 # detail about the deployment target rather than about this software, which is why it is read from
-# the gitignored `tools/deploy.env` (or the environment) instead of sitting here as a literal in a
-# public repository. `wp_` is WordPress's own default and the right fallback for anyone else.
+# the gitignored `tools/deploy.env` (or the environment) and never written here: this repository
+# is public, and a literal fallback publishes the very value the indirection exists to withhold.
+#
+# There is no default for the dump-based site, because none can be right: `wp_` made cmd_reset's
+# verification query name a table that does not exist, so the count came back empty and the
+# check could neither pass nor fail honestly. The commands that read the dump refuse instead
+# (need_prefix below). The `fresh` site is a stranger's empty install, so WordPress's own `wp_`
+# is correct there and nothing has to be configured.
 [ -f "$(dirname "${BASH_SOURCE[0]}")/deploy.env" ] && . "$(dirname "${BASH_SOURCE[0]}")/deploy.env"
-# The production dump carries the live site's prefix, and this environment IS that dump, so
-# `wp_` was never right here: it made cmd_reset's verification query name a table that does
-# not exist, so the count came back empty and the check could neither pass nor fail honestly.
-DB_PREFIX="${LICHTBILD_DB_PREFIX:-wp_ts_}"
+if [ "$FRESH" = 1 ]; then
+	DB_PREFIX=wp_
+else
+	DB_PREFIX="${LICHTBILD_DB_PREFIX:-}"
+fi
 
 say() { printf '[devenv] %s\n' "$*"; }
 die() { printf '[devenv] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# The value is never printed, here or anywhere else in this script; only whether it is set.
+need_prefix() {
+	[ -n "$DB_PREFIX" ] || die "LICHTBILD_DB_PREFIX is not set. Add the live site's table prefix to tools/deploy.env (gitignored); this environment is a dump of that site, so no default can be right."
+}
 
 mysql_client() { "$MARIADB_PREFIX/bin/mariadb" --socket="$DB_SOCKET" -u "$DB_USER" "$@"; }
 
@@ -218,6 +230,7 @@ cmd_setup() {
 	[ -x "$PHP_BIN" ] || die "PHP $PHP_VERSION missing: brew install php@$PHP_VERSION"
 	[ -x "$MARIADB_PREFIX/bin/mariadbd" ] || die "MariaDB missing: brew install mariadb@10.11"
 	[ -r "$PRODUCTION_SQL" ] || die "no production dump at $PRODUCTION_SQL"
+	need_prefix
 
 	mkdir -p "$ENV_DIR" "$SNAPSHOT_DIR"
 
@@ -310,9 +323,9 @@ verify() {
 	[ "${galleries:-0}" -ge 50 ] || die "WordPress can see only ${galleries:-0} galleries; the import did not land where it is read from"
 
 	prefix="$(wp_value eval 'global $wpdb; echo $wpdb->prefix;')"
-	[ "$prefix" = "$DB_PREFIX" ] || die "table prefix is '$prefix', expected $DB_PREFIX"
+	[ "$prefix" = "$DB_PREFIX" ] || die "WordPress's table prefix does not match LICHTBILD_DB_PREFIX"
 
-	say "  WordPress $version, $galleries galleries, prefix $prefix"
+	say "  WordPress $version, $galleries galleries, table prefix as configured"
 }
 
 write_router() {
@@ -576,6 +589,7 @@ cmd_snapshot() {
 
 cmd_reset() {
 	[ -r "$BASELINE_SQL" ] || die "no snapshot at $BASELINE_SQL - run 'snapshot' first"
+	need_prefix
 	db_running || start_db
 
 	say "restoring the database to its snapshot"
@@ -600,6 +614,15 @@ cmd_status() {
 
 	printf '%-22s %s\n' "wordpress:" "$(wp_cli core version 2>/dev/null || echo '?')"
 	echo
+	# Status is a diagnostic, so an unset prefix is reported rather than fatal; without it the
+	# row counts below would name tables that do not exist and read as zeroes.
+	if [ -z "$DB_PREFIX" ]; then
+		printf '%-22s %s\n' "row counts:" "unknown, LICHTBILD_DB_PREFIX is not set"
+		echo
+		printf '%-22s %s\n' "active plugins:" ""
+		wp_cli plugin list --status=active --field=name 2>/dev/null | sed 's/^/  /'
+		return 0
+	fi
 	printf '%-22s %s\n' "envira galleries:" "$(mysql_client -N -B "$DB_NAME" -e "SELECT COUNT(*) FROM ${DB_PREFIX}posts WHERE post_type='envira';" 2>/dev/null)"
 	printf '%-22s %s\n' "lichtbild galleries:" "$(mysql_client -N -B "$DB_NAME" -e "SELECT COUNT(*) FROM ${DB_PREFIX}posts WHERE post_type='lichtbild_gallery';" 2>/dev/null)"
 	printf '%-22s %s\n' "schema option:" "$(mysql_client -N -B "$DB_NAME" -e "SELECT option_value FROM ${DB_PREFIX}options WHERE option_name='lichtbild_schema_version';" 2>/dev/null || echo '(unset)')"

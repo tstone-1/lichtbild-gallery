@@ -924,10 +924,34 @@ msgstr ""
 #: includes/class-lichtbild-migration-screen.php:458
 msgid ""
 "Envira's original records were left in place, so rolling back restores "
-"exactly what was there rather than reconstructing it."
+"exactly what was there rather than reconstructing it. Changes made in "
+"Lichtbild since the migration are not shown while rolled back, and come back "
+"when you migrate again."
 msgstr ""
 "Enviras ursprüngliche Datensätze sind erhalten geblieben — ein Zurücksetzen "
-"stellt genau das wieder her, was vorher da war, statt es zu rekonstruieren."
+"stellt genau das wieder her, was vorher da war, statt es zu rekonstruieren. "
+"Änderungen, die seit der Übertragung in Lichtbild gemacht wurden, sind nach "
+"dem Zurücksetzen nicht sichtbar und kehren zurück, wenn du erneut überträgst."
+
+#. translators: %d: number of galleries and albums.
+#: includes/class-lichtbild-migration.php
+#, php-format
+msgid ""
+"%d gallery or album was edited in Lichtbild since an earlier migration, so "
+"its Lichtbild version was kept rather than converted again from Envira's "
+"record."
+msgid_plural ""
+"%d galleries and albums were edited in Lichtbild since an earlier migration, "
+"so their Lichtbild versions were kept rather than converted again from "
+"Envira's records."
+msgstr[0] ""
+"%d Galerie oder Album wurde seit einer früheren Übertragung in Lichtbild "
+"bearbeitet, daher wurde die Lichtbild-Fassung behalten, statt sie erneut aus "
+"Enviras Datensatz umzuwandeln."
+msgstr[1] ""
+"%d Galerien und Alben wurden seit einer früheren Übertragung in Lichtbild "
+"bearbeitet, daher wurden ihre Lichtbild-Fassungen behalten, statt sie erneut "
+"aus Enviras Datensätzen umzuwandeln."
 
 #: includes/class-lichtbild-migration.php:431
 msgid "The galleries have already been migrated."

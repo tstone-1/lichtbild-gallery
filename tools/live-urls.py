@@ -25,6 +25,7 @@ count that matters.
 import json
 import pathlib
 import re
+import ssl
 import sys
 
 import pymysql
@@ -38,8 +39,14 @@ if not CONFIG.exists():
 cfg = json.loads(CONFIG.read_text())
 prefix = cfg["PREFIX"]
 
+# Verified TLS is required, not merely preferred. With no TLS argument pymysql attempts TLS,
+# accepts any certificate, and falls back to plaintext if the server offers none, and this
+# connection crosses the internet to the production database. An SSLContext makes pymysql
+# refuse a server without TLS and check the certificate and hostname. A host whose MySQL
+# certificate is self-signed names that certificate (or its CA) as "ca" in tests/.db.json.
 cursor = pymysql.connect(
     host=cfg["host"],
+    ssl=ssl.create_default_context(cafile=cfg.get("ca")),
     user=cfg["DB_USER"],
     password=cfg["DB_PASSWORD"],
     database=cfg["DB_NAME"],

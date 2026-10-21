@@ -294,6 +294,74 @@ class Lichtbild_Repository {
 	}
 
 	/**
+	 * Builds the record Lichtbild stores for one gallery.
+	 *
+	 * The one definition of the envelope. The gallery editor, block creation and the migration
+	 * each assembled it by hand until 26.10.0, and the reader below refuses a record without
+	 * settings, so a writer that got the shape wrong produced a gallery that silently rendered
+	 * from Envira's record, or not at all.
+	 *
+	 * @param array $settings Normalised settings.
+	 * @param array $items    Item records, in display order.
+	 *
+	 * @return array{version:int,settings:array,items:array} The record.
+	 */
+	public static function gallery_record( array $settings, array $items ) {
+		return array(
+			'version'  => Lichtbild_Config::VERSION,
+			'settings' => $settings,
+			'items'    => array_values( $items ),
+		);
+	}
+
+	/**
+	 * Builds the record Lichtbild stores for one album.
+	 *
+	 * @param array $settings Normalised album settings.
+	 * @param array $items    Member records, in display order.
+	 *
+	 * @return array{version:int,settings:array,items:array} The record.
+	 */
+	public static function album_record( array $settings, array $items ) {
+		return array(
+			'version'  => Lichtbild_Album_Config::VERSION,
+			'settings' => $settings,
+			'items'    => array_values( $items ),
+		);
+	}
+
+	/**
+	 * Stores a gallery record.
+	 *
+	 * `wp_slash()` because core's metadata layer unslashes the value it is handed, which is right
+	 * for the raw `$_POST` it normally receives and wrong for a value already unslashed. A caption
+	 * reading `C:\Photos` would otherwise be stored as `C:Photos`, losing a backslash per save and
+	 * never reporting it. Every writer had to remember that until this existed.
+	 *
+	 * @param int   $post_id  Gallery post ID.
+	 * @param array $settings Normalised settings.
+	 * @param array $items    Item records, in display order.
+	 *
+	 * @return int|bool What `update_post_meta()` returned.
+	 */
+	public static function store_gallery( $post_id, array $settings, array $items ) {
+		return update_post_meta( (int) $post_id, self::GALLERY_META_V2, wp_slash( self::gallery_record( $settings, $items ) ) );
+	}
+
+	/**
+	 * Stores an album record, with the slashing `store_gallery()` explains.
+	 *
+	 * @param int   $post_id  Album post ID.
+	 * @param array $settings Normalised album settings.
+	 * @param array $items    Member records, in display order.
+	 *
+	 * @return int|bool What `update_post_meta()` returned.
+	 */
+	public static function store_album( $post_id, array $settings, array $items ) {
+		return update_post_meta( (int) $post_id, self::ALBUM_META_V2, wp_slash( self::album_record( $settings, $items ) ) );
+	}
+
+	/**
 	 * Returns every post ID of one of Lichtbild's types, whatever its status.
 	 *
 	 * The status list is explicit because `get_posts()` defaults to `publish` alone, and a
@@ -340,15 +408,17 @@ class Lichtbild_Repository {
 		// This is also what makes an interrupted migration safe. Records are converted before
 		// any row is renamed, so a request that dies in the middle leaves converted records on
 		// an unmigrated site — inert, because of this condition.
-		if ( $this->owns_data ) {
-			$own = get_post_meta( $post_id, self::GALLERY_META_V2, true );
-
-			if ( is_array( $own ) && ! empty( $own['settings'] ) ) {
-				return $this->build_from_own( $post_id, $own );
-			}
-		}
-
+		//
+		// The exception is a gallery that has no Envira record at all: one created in Lichtbild
+		// after the migration, on a site that was later rolled back. There is only one source of
+		// truth then, so there is nothing to disagree with, and refusing it made every such
+		// gallery render nothing until the site was migrated again.
+		$own  = get_post_meta( $post_id, self::GALLERY_META_V2, true );
 		$data = get_post_meta( $post_id, self::GALLERY_META, true );
+
+		if ( ( $this->owns_data || ! is_array( $data ) ) && is_array( $own ) && ! empty( $own['settings'] ) ) {
+			return $this->build_from_own( $post_id, $own );
+		}
 
 		if ( ! is_array( $data ) ) {
 			return null;
@@ -454,17 +524,17 @@ class Lichtbild_Repository {
 		// schema said, so a migrated site's albums were still in Envira's format — which is why
 		// an album editor could not be written before this existed: it would have had to write
 		// Envira's format back, the one thing the gallery side is built to avoid.
-		if ( $this->owns_data ) {
-			$own = get_post_meta( $post_id, self::ALBUM_META_V2, true );
-
-			if ( is_array( $own ) && isset( $own['settings'] ) && is_array( $own['settings'] ) ) {
-				$items = isset( $own['items'] ) && is_array( $own['items'] ) ? $own['items'] : array();
-
-				return new Lichtbild_Album( $post_id, $own['settings'], self::clean_album_items( $items ) );
-			}
-		}
-
+		//
+		// And the same exception: an album with no Envira record has one source of truth, so a
+		// rolled-back site still reads it.
+		$own  = get_post_meta( $post_id, self::ALBUM_META_V2, true );
 		$data = get_post_meta( $post_id, self::ALBUM_META, true );
+
+		if ( ( $this->owns_data || ! is_array( $data ) ) && is_array( $own ) && isset( $own['settings'] ) && is_array( $own['settings'] ) ) {
+			$items = isset( $own['items'] ) && is_array( $own['items'] ) ? $own['items'] : array();
+
+			return new Lichtbild_Album( $post_id, $own['settings'], self::clean_album_items( $items ) );
+		}
 
 		if ( ! is_array( $data ) ) {
 			return null;

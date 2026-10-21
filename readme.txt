@@ -4,7 +4,7 @@ Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 26.9.1
+Stable tag: 26.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -139,6 +139,13 @@ than only in one gallery.
 
 == Changelog ==
 
+= 26.10.0 =
+* Migrating again after a rollback keeps galleries and albums edited since the earlier migration. Galleries created in Lichtbild keep rendering while rolled back.
+* Saving a gallery keeps images it already holds, even when the person saving cannot read them.
+* A double click on a thumbnail opens one lightbox.
+* Justified galleries with small rows keep their own height on narrow screens.
+* Uninstall also removes the editors' temporary notices.
+
 = 26.9.1 =
 * Restored bookmarked image links from both former plugin names.
 * Repeated images open their own captions. Tag edits stay synchronized across repeated rows, and conflicting submissions are refused without replacing saved gallery data.
@@ -225,6 +232,9 @@ than only in one gallery.
 * Galleries and albums are centred in the content column again.
 
 == Upgrade Notice ==
+
+= 26.10.0 =
+Fixes a migration after a rollback overwriting gallery edits, keeps images when another user saves a gallery, and fixes double-opening lightboxes and small mobile rows. Updating is recommended.
 
 = 26.9.1 =
 Restores older image bookmarks, fixes repeated-image captions and tag editing, corrects cropped lightbox geometry, and restores smaller gallery rows on mobile screens.

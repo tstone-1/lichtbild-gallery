@@ -18,6 +18,23 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [26.10.0] - 2026-10-21
+
+### Fixed
+- Migrating again after a rollback keeps galleries and albums edited in Lichtbild since the
+  earlier migration, and says how many it kept. Edits made in Envira after the rollback still
+  arrive. Galleries and albums created in Lichtbild keep rendering while the site is rolled back.
+- Saving a gallery no longer drops images it already holds when the saving user cannot read
+  them; adding such an image is still refused.
+- A double click on a thumbnail, or a deep link over an open lightbox, opens one lightbox.
+- On narrow screens, justified galleries with rows below the mobile height keep their own height
+  instead of being raised to it.
+- EXIF is read only from attachments. Uninstall also removes the editors' short-lived notices.
+- The public-safe push hook matches every policy pattern on macOS and also checks commit
+  messages. Deployment refuses uncommitted upload files and verifies the published bytes after
+  each rename. The database tools require a verified TLS connection, and the development
+  environment no longer carries a site-specific table prefix.
+
 ## [26.9.1] - 2026-09-25
 
 ### Fixed

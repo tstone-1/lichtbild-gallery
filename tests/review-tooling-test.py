@@ -44,9 +44,9 @@ def init(folder):
     git(folder, "config", "user.email", "fixture@example.test")
 
 
-def commit(folder):
+def commit(folder, message="Fixture"):
     git(folder, "add", ".")
-    git(folder, "commit", "--quiet", "-m", "Fixture")
+    git(folder, "commit", "--quiet", "--allow-empty", "-m", message)
     return git(folder, "rev-parse", "HEAD")
 
 
@@ -57,7 +57,12 @@ with tempfile.TemporaryDirectory(prefix="lichtbild-tooling-") as scratch:
     home = base / "home"
     policy = home / "agent-memory/bin/audit-agent-memory.ps1"
     policy.parent.mkdir(parents=True)
-    policy.write_text("$ForbiddenPatterns = @(\n    'PRIVATE_FIXTURE_MARKER'\n)\n$AllowedFiles = @(\n    'allowed.txt'\n)\n", encoding="utf-8")
+    # Shaped like the shared policy: .NET regexes, a word-boundary entry among them, and a
+    # second list for commit messages anchored to the start of a trailer line.
+    policy.write_text(
+        "$ForbiddenPatterns = @(\n    'PRIVATE_FIXTURE_MARKER',\n    '\\bBOUNDED\\s?TOKEN\\b'\n)\n"
+        "$ForbiddenCommitMessagePatterns = @(\n    '^[ \\t]*Fixture-Agent:.*\\b(robot)\\b'\n)\n"
+        "$AllowedFiles = @(\n    'allowed.txt'\n)\n", encoding="utf-8")
     env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), SKIP_AGENT_MEMORY_AUDIT="0")
     (repo / "safe.txt").write_text("safe\n", encoding="utf-8")
     clean = commit(repo)
@@ -67,7 +72,8 @@ with tempfile.TemporaryDirectory(prefix="lichtbild-tooling-") as scratch:
         result = run([BASH, str(ROOT / ".githooks/pre-push")], repo, env=env,
                      input=f"refs/heads/test {oid} refs/heads/test {remote}\n", success=False)
         assert (result.returncode == 0) == expected, (label, result.stdout, result.stderr)
-        assert "PRIVATE_FIXTURE_MARKER" not in result.stdout + result.stderr, "hook leaked a value"
+        for value in ("PRIVATE_FIXTURE_MARKER", "BOUNDED TOKEN", "robot"):
+            assert value not in result.stdout + result.stderr, ("hook leaked a value", label)
         print("[OK] " + label, flush=True)
 
     hook(clean, zeros, True, "new clean ref passes")
@@ -84,6 +90,24 @@ with tempfile.TemporaryDirectory(prefix="lichtbild-tooling-") as scratch:
     (repo / "allowed.txt").write_text("PRIVATE_FIXTURE_MARKER\n", encoding="utf-8")
     allowed = commit(repo)
     hook(allowed, clean, True, "shared policy file exception is honored")
+    # `\b` and `\s` mean nothing to POSIX ERE, so under `git grep -E` this entry never matched.
+    (repo / "bounded.txt").write_text("a BOUNDED TOKEN here\n", encoding="utf-8")
+    bounded = commit(repo)
+    hook(bounded, allowed, False, "a word-boundary pattern blocks its token")
+    git(repo, "switch", "--detach", allowed)
+    (repo / "bounded.txt").write_text("UNBOUNDED TOKENS here\n", encoding="utf-8")
+    near_miss = commit(repo)
+    hook(near_miss, allowed, True, "the word boundary still lets a longer word through")
+    trailer = commit(repo, "Fixture\n\nFixture-Agent: a robot <robot@example.test>\n")
+    hook(trailer, near_miss, False, "a forbidden trailer in a commit message blocks the push")
+    hook(trailer, zeros, False, "a new ref carrying a trailer commit is blocked")
+    prose = commit(repo, "Fixture\n\nThe Fixture-Agent: robot line belongs in prose only here.\n")
+    hook(prose, trailer, True, "the trailer pattern is anchored to the start of a line")
+    # A policy whose message list this hook cannot read must not pass as a tree-only scan.
+    saved = policy.read_text(encoding="utf-8")
+    policy.write_text(saved.replace("$ForbiddenCommitMessagePatterns", "$Renamed"), encoding="utf-8")
+    hook(prose, trailer, False, "an unreadable message policy fails closed")
+    policy.write_text(saved, encoding="utf-8")
 
     package = base / "package"
     init(package)

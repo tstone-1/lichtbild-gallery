@@ -455,7 +455,7 @@ class Lichtbild_Migration_Screen {
 		</p>
 
 		<p class="description">
-			<?php esc_html_e( 'Envira\'s original records were left in place, so rolling back restores exactly what was there rather than reconstructing it.', 'lichtbild-gallery' ); ?>
+			<?php esc_html_e( 'Envira\'s original records were left in place, so rolling back restores exactly what was there rather than reconstructing it. Changes made in Lichtbild since the migration are not shown while rolled back, and come back when you migrate again.', 'lichtbild-gallery' ); ?>
 		</p>
 
 		<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post">

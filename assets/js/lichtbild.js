@@ -141,6 +141,11 @@
 		this.page = this.config.page || 1;
 		this.slideCache = Object.create( null );
 		this.pending = false;
+		// True from the moment a lightbox is requested until it closes. Opening waits for the
+		// PhotoSwipe import and, on a paginated gallery, a slide request, and a double click
+		// landed in that wait: two instances stacked, each bound the arrow keys and wrote the
+		// hash, and the visitor had to close twice.
+		this.opening = false;
 		this.sequence = 0;
 		this.activeTag = '';
 
@@ -248,6 +253,12 @@
 		var wantedId = parseInt( link.getAttribute( 'data-lichtbild-item' ), 10 ) || 0;
 		var wantedKey = link.getAttribute( 'data-lichtbild-key' ) || '';
 
+		if ( this.opening ) {
+			return;
+		}
+
+		this.opening = true;
+
 		Promise.all( [ loadPhotoSwipe(), this.slides() ] ).then( function ( results ) {
 			var PhotoSwipe = results[ 0 ];
 			var slides = results[ 1 ];
@@ -274,6 +285,7 @@
 			// so give the browser back what it would have done: follow the link to the image.
 			// Silent failure is the one outcome a visitor cannot work around, and this is the
 			// only path where the plugin has already taken the default action away.
+			self.opening = false;
 			window.location.href = link.href;
 		} );
 	};
@@ -321,6 +333,7 @@
 		} );
 
 		pswp.on( 'destroy', function () {
+			self.opening = false;
 			self.clearHash();
 		} );
 
@@ -728,6 +741,12 @@
 		var self = this;
 		var wantedId = parseInt( match[ 2 ], 10 );
 
+		if ( this.opening ) {
+			return;
+		}
+
+		this.opening = true;
+
 		Promise.all( [ loadPhotoSwipe(), this.allSlides() ] ).then( function ( results ) {
 			var slides = results[ 1 ];
 			var i;
@@ -739,12 +758,15 @@
 					return;
 				}
 			}
+
+			self.opening = false;
 		} ).catch( function () {
 			// Nothing to fall back to here -- no click was intercepted, the page is simply
 			// loaded at a deep link. The grid is already rendered and the linked image is in
 			// it, so leaving the page as it stands is the correct outcome; what matters is that
 			// the rejection is consumed, and that `loadPhotoSwipe()` has cleared its cache so a
 			// click afterwards can still succeed.
+			self.opening = false;
 		} );
 	};
 

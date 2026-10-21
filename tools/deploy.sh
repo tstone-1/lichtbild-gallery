@@ -5,9 +5,9 @@
 # Usage:
 #   bash tools/deploy.sh audit         # ask the SERVER what it has: every shipped file, by digest
 #   bash tools/deploy.sh plan          # what would be uploaded, and in what order
-#   bash tools/deploy.sh urls          # enumerate every URL the plugin owns, from the database
-#   bash tools/deploy.sh capture <out> # fetch those URLs and record a normalised hash each
-#   bash tools/deploy.sh fingerprint <out>  # the same URLs, recorded SEMANTICALLY
+#   bash tools/deploy.sh urls > urls.txt  # every URL the plugin owns, from the database
+#   bash tools/deploy.sh capture <out> [urls]  # fetch those URLs (default ./urls.txt), hash each
+#   bash tools/deploy.sh fingerprint <out> [urls]  # the same URLs, recorded SEMANTICALLY
 #   bash tools/deploy.sh push          # upload, chunked, verifying every file by digest
 #   bash tools/deploy.sh compare <a> <b>
 #
@@ -85,90 +85,27 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHUNK=8192
 
 # Callers before definitions is a fatal error for a visitor, so this list is ordered, not
-# alphabetical, and every constraint below is asserted by `plan` from a grep rather than taken
-# on trust. It is the set that changed since the deployed release; re-uploading a file that did
-# not change buys nothing and adds a transfer that can fail.
+# alphabetical. It is the set that differs from the deployed release, as `audit` reports it;
+# re-uploading a file that did not change buys nothing and adds a transfer that can fail.
 #
-# 26.8.23 has ONE cross-file constraint and it points the USUAL way, which is worth saying out
-# loud one release after the only one that inverted: this release ADDS a method, so the
-# definition lands before its callers.
+# The rules the order follows, each paid for on an earlier deploy (docs/deploys.md has the
+# record of every release and the reasoning for its order):
 #
-#   1. `Lichtbild_Settings::claims_envira_shortcodes()` is NEW, and BOTH
-#      `class-lichtbild-shortcode.php` and `class-lichtbild-assets.php` stop calling
-#      `should_take_over()` and call it instead. Land either caller before
-#      `class-lichtbild-settings.php` and every front-end request hits "Call to undefined method"
-#      until the definition arrives -- `register_shortcodes()` runs on `init` and
-#      `maybe_enqueue_early()` on `wp_enqueue_scripts`, so that is every page on the site, not
-#      only the ones with a gallery. Settings first, then shortcode, then assets.
+#   - A definition lands before its callers. A NEW method on an existing class is invisible to
+#     `plan`, whose grep looks for callers of a class name, so that edge is derived from the
+#     diff by hand and asserted here, not left to "constraints: satisfied".
+#   - A constructor that gains a required argument is the mirror case: its container lands
+#     first, because the deployed container calling a new constructor with too few arguments
+#     is a fatal on every request, while PHP accepts an extra argument to the old one.
+#   - A method REMOVED this release must have no caller left on the server when it goes;
+#     `check_removed_methods()` reports that set, including when it is empty.
+#   - `lichtbild-gallery.php` is last. It changes LICHTBILD_VERSION, the `?ver=` on every asset,
+#     so cache keys move only after every changed asset and class has been digest-verified.
 #
-# `class-lichtbild-config.php` has no cross-file edge at all this release: it drops the second
-# argument it passes to the `lichtbild_config_sanitize` filter, and passing a hook fewer arguments
-# than a callback declared is not an error in PHP. There is no third-party callback on this site
-# in any case. `readme.txt` is inert.
-#
-# NOTHING is removed this release, so the backwards constraint that 26.8.22 needed does not
-# apply -- and that is asserted rather than remembered: `check_removed_methods()` reports
-# "methods dropped this release: none", which is the emptiness case its own test covers (case C).
-#
-# `plan` CAN see none of this either way. Its walk asks which requires are new and whether an
-# asset precedes the bootstrap; a method added to an existing class appears in neither question,
-# and the grep it runs looks for callers of a CLASS name rather than of a method -- and
-# `Lichtbild_Settings` was already required, already constructed, already there. It will print
-# "constraints: satisfied" over an order that is a fatal on every page. The order above is
-# derived from the diff by hand and the reasoning is written down here for the next reader.
-#
-# `lichtbild-gallery.php` is last for the usual reason: LICHTBILD_VERSION is the `?ver=` on the assets. No
-# asset changed this release, so the window is harmless either way; the position costs nothing
-# and stating a rule once per release is cheaper than deciding whether it applies.
-#
-# 26.8.25 is the twelve files `audit` reported as differing from the server's inert copy, which
-# is what that subcommand is for. The plugin directory is on the server and still not in
-# `active_plugins`, so ordering remains moot for the same reason it was at 26.8.24 -- PHP opens
-# none of it while it uploads -- and the bootstrap is last anyway, because the day this list is
-# pasted into a live directory that habit is the only thing standing between a half-uploaded set
-# and a fatal.
-#
-# 26.8.24 was the one release where this list was NOT the answer to "what changed": the plugin was
-# renamed, so every file has a new name and the whole plugin goes into a NEW directory that the
-# server does not have. The set is therefore the complete deployed set -- the archive's files
-# minus SERVER_ABSENT, plus SERVER_EXTRA -- and an audit of the old directory could not have
-# produced it, because not one of these paths exists there.
-#
-# Ordering cannot break anything on this deploy and the bootstrap is still last. The new
-# directory is inert until someone activates the plugin in wp-admin, so a half-uploaded set is a
-# plugin nobody is running, which is the opposite of 26.8.7's hazard. Verify by digest anyway:
-# the transport drops large transfers, and an inactive plugin with a 0-byte class is a fatal the
-# moment it IS activated.
-#
-# LICENSE, languages/lichtbild-gallery-de_DE.po and languages/lichtbild-gallery.pot are ABSENT from the server and
-# deliberately stay that way: none is read at runtime, none has ever been deployed, and each is
-# one more transfer that can fail for no behavioural gain. LICENSE ships in the wordpress.org
-# ZIP, which is a different artifact.
-# 26.8.27 has two constructor/method edges and both are asserted here rather than left to the
-# alphabetical audit output. `Lichtbild_Gallery` calls the new `use_live_metadata()` method, so
-# Item lands before Gallery. The Block constructor gains a third required argument, which makes
-# its order the mirror of the usual definition-before-caller rule: the container lands first.
-# PHP accepts its third argument while the deployed two-argument constructor is still present;
-# putting Block first would make the deployed container call a three-argument constructor with
-# only two and fatal every request. Config precedes the editor and gallery code that reads its
-# new setting. The new Block PHP precedes its JavaScript, so an editor can see the old interface
-# over the new endpoint but never the new interface over an endpoint that does not exist.
-#
-# The bootstrap remains last because it changes `LICHTBILD_VERSION`, which releases every new
-# asset URL from cache only after all five assets have landed and been digest-verified.
-# 26.9.0 is the ten changed runtime files reported by the server audit, plus the readme
-# and bootstrap version bump. The metabox base introduces complete_section() and
-# render_save_notice(), so it must precede both editor subclasses that call/register them.
-# The block script sends images_complete before the endpoint starts requiring it: the old
-# endpoint accepts the additional field, while the reverse order would refuse new galleries.
-# The catalogue lands before the new save notice can render. The remaining PHP changes add
-# no cross-file requirements or required arguments. Bootstrap stays last so asset cache keys
-# move only after every changed asset and PHP file has been verified.
-# 26.9.1 is the eleven differences measured by the live audit. Gallery adds item_key(), so
-# it precedes Ajax and Renderer. Ajax precedes Renderer so keyed grid links cannot briefly
-# meet an endpoint without occurrence keys. The front-end script accepts old unkeyed markup;
-# the editor script synchronizes shared tags before PHP begins rejecting conflicting rows.
-# The catalogue precedes that new notice, and the bootstrap releases asset cache keys last.
+# The current set (26.9.1): Gallery adds item_key(), so it precedes Ajax and Renderer; Ajax
+# precedes Renderer so keyed grid links never meet an endpoint without occurrence keys; the
+# editor script synchronises shared tags before PHP starts refusing conflicting rows; the
+# catalogue precedes the new notice it translates.
 UPLOAD_ORDER=(
 	"languages/lichtbild-gallery-de_DE.mo"
 	"assets/css/lichtbild.css"
@@ -1141,10 +1078,16 @@ cmd_channels() {
 
 	echo
 
+	# Into a variable first, not read from `< <(shipped_files)`: a process substitution's exit
+	# status is lost, so `done < <(...) || return` could never fire, and a SERVER_EXTRA name
+	# missing from the tree printed its error and let `channels` report the channels in step.
+	local listing
+	listing="$(shipped_files)" || return 2
+
 	local -a shipped
 	while IFS= read -r rel; do
 		[ -n "$rel" ] && shipped+=( "$rel" )
-	done < <(shipped_files) || return 1
+	done <<< "$listing"
 
 	[ "${#shipped[@]}" -gt 0 ] || {
 		echo "[ERROR] the shipped set is empty, so this compared nothing" >&2
@@ -1220,7 +1163,39 @@ cmd_channels() {
 	return 1
 }
 
+# Refuses to upload a file whose bytes are not the committed ones. `put_chunked` reads the
+# working tree and verifies the server against it, so an unfinished edit, or `tests/mutations.php`
+# interrupted mid-run (it edits `includes/` in place), would be published with every line reading
+# "digest verified". `tools/build-zip.sh` builds from HEAD for the same reason: a deploy nobody
+# can reproduce from a commit is not a release. Untracked and ignored names count too, because
+# an upload file that is not committed is not in any release either.
+#
+# LICHTBILD_DEPLOY_DIRTY=1 is the override for an emergency fix that cannot wait for a commit.
+# It is an explicit variable rather than a flag on `push` so it cannot be typed by habit.
+check_clean_upload_set() {
+	local status
+
+	if [ "${LICHTBILD_DEPLOY_DIRTY:-}" = 1 ]; then
+		echo "[WARN] LICHTBILD_DEPLOY_DIRTY=1: uploading the working tree, committed or not" >&2
+		return 0
+	fi
+
+	# Fails closed: without git there is no answer to "is this committed", and an empty status
+	# from a missing tool would read exactly like a clean tree.
+	if ! status="$(cd "$ROOT" && git status --porcelain --untracked-files=all --ignored -- "${UPLOAD_ORDER[@]}" 2>/dev/null)"; then
+		echo "[ERROR] could not ask git whether the upload set is committed; refusing to push" >&2
+		return 1
+	fi
+
+	if [ -n "$status" ]; then
+		echo "[ERROR] the upload set differs from HEAD; commit it, or set LICHTBILD_DEPLOY_DIRTY=1:" >&2
+		printf '        %s\n' "$status" >&2
+		return 1
+	fi
+}
+
 cmd_push() {
+	check_clean_upload_set || return 1
 	cmd_plan || return 1
 
 	# A pre-flight, not a gate. Knowing before the upload is strictly more useful than after,
@@ -1327,11 +1302,14 @@ cmd_urls() {
 # Record only complete observations. A failed transfer can still print an HTTP status and
 # partial body, so require curl's success and a non-empty body before hashing either format.
 cmd_observe() {
-	local mode="$1" out="$2" urls="${3:-$WORK/urls.txt}"
+	# The default is the file the documented `urls > urls.txt` writes, in the directory the command
+	# runs from. It used to be `$WORK/urls.txt`, a path inside this run's fresh temp dir, which
+	# nothing ever writes and which therefore could never exist.
+	local mode="$1" out="$2" urls="${3:-urls.txt}"
 	local u code hash count=0
 
 	[ -s "$urls" ] || {
-		echo "[ERROR] no URL list at $urls; run 'urls' first" >&2
+		echo "[ERROR] no URL list at $urls; write one with: bash tools/deploy.sh urls > $urls" >&2
 		return 2
 	}
 

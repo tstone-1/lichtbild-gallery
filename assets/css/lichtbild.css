@@ -359,8 +359,15 @@
 		flex: 1 1 190px;
 	}
 
-	.lichtbild-wrap {
-		--lichtbild-effective-row: 110;
+	/* The smaller of the configured row and 110, never a fixed 110: a gallery set to 60px rows
+	 * was raised to 110 on a phone, the same promotion the column cap below is written to avoid.
+	 * Unitless, because the flex-basis multiplies it into pixels itself.
+	 *
+	 * Declared on the item, not the wrap. The configured row is an inline property on the grid,
+	 * which sits inside the wrap, so at the wrap `var(--lichtbild-row)` is still the default 150
+	 * and the cap came out 110 whatever the gallery said. */
+	.lichtbild-justified .lichtbild-item {
+		--lichtbild-effective-row: min(var(--lichtbild-row), 110);
 	}
 
 	/* A fixed-column gallery gives up its configured count on a narrow screen, because that
