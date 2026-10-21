@@ -102,20 +102,22 @@ CHUNK=8192
 #   - `lichtbild-gallery.php` is last. It changes LICHTBILD_VERSION, the `?ver=` on every asset,
 #     so cache keys move only after every changed asset and class has been digest-verified.
 #
-# The current set (26.9.1): Gallery adds item_key(), so it precedes Ajax and Renderer; Ajax
-# precedes Renderer so keyed grid links never meet an endpoint without occurrence keys; the
-# editor script synchronises shared tags before PHP starts refusing conflicting rows; the
-# catalogue precedes the new notice it translates.
+# The current set (26.10.0): the catalogue precedes the new migration warning it translates;
+# the repository gains gallery_record()/album_record()/store_gallery()/store_album(), so it
+# precedes the migration, both editors and the block, which now call them (the deployed callers
+# never do, so the repository can land alone); the remaining PHP changes are self-contained.
 UPLOAD_ORDER=(
 	"languages/lichtbild-gallery-de_DE.mo"
-	"assets/css/lichtbild.css"
-	"assets/js/editor.js"
-	"assets/js/lichtbild.js"
-	"includes/class-lichtbild-item.php"
-	"includes/class-lichtbild-gallery.php"
-	"includes/class-lichtbild-ajax.php"
-	"includes/class-lichtbild-renderer.php"
+	"includes/class-lichtbild-repository.php"
+	"includes/class-lichtbild-exif.php"
+	"includes/class-lichtbild-migration.php"
+	"includes/class-lichtbild-migration-screen.php"
 	"includes/class-lichtbild-editor.php"
+	"includes/class-lichtbild-album-editor.php"
+	"includes/class-lichtbild-block.php"
+	"uninstall.php"
+	"assets/css/lichtbild.css"
+	"assets/js/lichtbild.js"
 	"readme.txt"
 	"lichtbild-gallery.php"
 )

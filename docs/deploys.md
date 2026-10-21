@@ -19,6 +19,8 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.10.0 deploy, the first through the hardened push and the PCRE hook* — thirteen FTPS files,
+  160 of 160 URLs unchanged as predicted with `ver=26.10.0` live, and SVN r3757735 matching all 41.
 - *The 26.9.1 deploy, which replaces only verified files* — eleven staged FTPS files, all 160 URLs
   unchanged semantically, and 41 matching files in SVN r3713218 and the public download.
 - *The 26.9.0 deploy, whose verification now refuses failed observations* — twelve-file order from
@@ -159,6 +161,40 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.10.0 deploy, the first through the hardened push and the PCRE hook
+
+Published 2026-10-21 from Git commit `50dc03a`, first to the site over FTPS, then to wordpress.org
+as **SVN r3757735**. The release fixes an independent review's findings of 2026-10-20, the
+re-migration that overwrote Lichtbild edits first among them, so it is also the first release
+through three of that review's tooling fixes: the pre-push hook scanning with PCRE and checking
+commit messages (it passed both), `push` refusing uncommitted upload files, and the database
+tools requiring verified TLS. The TLS change was expected to need a `"ca"` entry for the host's
+MySQL certificate; it did not, and `live-urls.py` produced the usual 160 URLs on the first run.
+
+**The live audit selected thirteen files**, the previous `UPLOAD_ORDER` holding five that the
+server already matched and missing seven it did not. The catalogue lands first, ahead of the new
+migration warning it translates. The repository gains `gallery_record()`, `album_record()`,
+`store_gallery()` and `store_album()`, so it precedes the migration, both editors and the block,
+which call them; the deployed callers never do, so the repository could land alone. The bootstrap
+is last. `plan` reported no new requires and no removed methods, which is right: `convert()`'s
+signature changed, but it is private and its only callers are in the same file.
+
+All thirteen files landed without a retry, each digest-verified on landing and again after the
+whole set: **0 mismatches**. The full audit then reported **40 matching files, 0 changed, 0
+unreadable**, and only the two deliberately absent files. Nothing in this release changes
+rendered markup for a migrated site, and `capture` strips `?ver=`, so **160 of 160 URLs unchanged,
+all HTTP 200 before and after** was the prediction and proves only that nothing broke; the live
+asset URLs carrying `ver=26.10.0` are what establish that the upload landed.
+
+The committed archive's **41 files** passed all 37 fresh-install checks on WordPress 7.1.3 under
+PHP 8.2 and Plugin Check 2.1.0 reported no errors, both against the installed archive rather than
+the working tree. The render suite passed 268 checks on PHP 8.1 through 8.5, 230 of 230 main and
+14 of 14 feature mutations were killed by their predicted checks on 8.5 and 8.2, the browser layout
+check passed, and CI run `39548337764` completed all six jobs at the release commit. Exporting
+`tags/26.10.0` at r3757735 and downloading the public ZIP both reproduced the same 41 files, the
+plugin API reported 26.10.0, and `channels` found the two channels identical for every shared
+file, the German catalogue remaining the documented exception.
 
 ### The 26.9.1 deploy, which replaces only verified files
 
