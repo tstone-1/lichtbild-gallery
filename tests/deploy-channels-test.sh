@@ -46,15 +46,21 @@ expect() {
 	esac
 }
 
-version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" lichtbild-gallery.php | head -1)"
-base="$ROOT/build/lichtbild-gallery-$version.zip"
+# Build the archive from a throwaway commit of the tracked files as they are on disk, because
+# `channels` compares those files and tools/build-zip.sh ships HEAD. An archive reused from build/,
+# or built from this checkout's HEAD, differs as soon as a shipped file changes under the same
+# version number, and the control below then fails with nothing wrong. build/ may hold the released
+# zip, so nothing here writes to it. Step 7 uses the same copy.
+tree="$TMP/tree"; mkdir -p "$tree"
+( cd "$ROOT" && git ls-files -z | tar --null -T - -cf - ) | tar -xf - -C "$tree"
+git -C "$tree" init --quiet
+git -C "$tree" add -A
+git -C "$tree" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false \
+	commit --quiet -m "archive under test" || { echo "[FAIL] could not commit the copy of the tree"; exit 1; }
+bash "$tree/tools/build-zip.sh" >/dev/null || { echo "[FAIL] could not build the archive to test against"; exit 1; }
 
-# The archive holds the committed tree and an existing one is reused, so the control below fails
-# while a shipped file has uncommitted changes, and after a commit that changes one under the same
-# version number. CI starts clean. Locally, bump the version; the zip may be the released one.
-if [ ! -f "$base" ]; then
-	bash tools/build-zip.sh >/dev/null || { echo "[FAIL] could not build the archive to test against"; exit 1; }
-fi
+version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" lichtbild-gallery.php | head -1)"
+base="$tree/build/lichtbild-gallery-$version.zip"
 
 [ -f "$base" ] || { echo "[FAIL] no archive at $base"; exit 1; }
 
@@ -105,11 +111,7 @@ expect "an archive without the plugin root is refused" 2 "has no lichtbild-galle
 # 7. a SERVER_EXTRA file missing from the tree is an unknown shipped set, not a clean comparison.
 #    Until the listing was taken into a variable first, `done < <(shipped_files) || return` lost
 #    this failure in the process substitution: the error printed and the channels still agreed.
-#    Run from a copy of the tracked tree, so the checkout under test is never touched.
-tree="$TMP/tree"; mkdir -p "$tree"
-( cd "$ROOT" && git ls-files -z | tar --null -T - -cf - ) | tar -xf - -C "$tree"
-git -C "$tree" init --quiet
-git -C "$tree" add -A
+#    Run from the copy of the tracked tree, so the checkout under test is never touched.
 rm "$tree/languages/lichtbild-gallery-de_DE.mo"
 out="$(bash "$tree/tools/deploy.sh" channels --against "$base" 2>&1)"
 code=$?
