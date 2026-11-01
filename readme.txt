@@ -4,7 +4,7 @@ Tags: gallery, photo gallery, image gallery, lightbox, photography
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 26.10.0
+Stable tag: 26.11.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -139,6 +139,9 @@ than only in one gallery.
 
 == Changelog ==
 
+= 26.11.0 =
+* Requires PHP 8.2 or later. PHP 8.1 reached end of life on 2025-12-31 and no longer receives security fixes.
+
 = 26.10.0 =
 * Migrating again after a rollback keeps galleries and albums edited since the earlier migration. Galleries created in Lichtbild keep rendering while rolled back.
 * Saving a gallery keeps images it already holds, even when the person saving cannot read them.
@@ -232,6 +235,9 @@ than only in one gallery.
 * Galleries and albums are centred in the content column again.
 
 == Upgrade Notice ==
+
+= 26.11.0 =
+Requires PHP 8.2 or later. PHP 8.1 no longer receives security fixes, including those for the critical PHP flaws patched in October 2026.
 
 = 26.10.0 =
 Fixes a migration after a rollback overwriting gallery edits, keeps images when another user saves a gallery, and fixes double-opening lightboxes and small mobile rows. Updating is recommended.
