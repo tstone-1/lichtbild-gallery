@@ -102,22 +102,9 @@ CHUNK=8192
 #   - `lichtbild-gallery.php` is last. It changes LICHTBILD_VERSION, the `?ver=` on every asset,
 #     so cache keys move only after every changed asset and class has been digest-verified.
 #
-# The current set (26.10.0): the catalogue precedes the new migration warning it translates;
-# the repository gains gallery_record()/album_record()/store_gallery()/store_album(), so it
-# precedes the migration, both editors and the block, which now call them (the deployed callers
-# never do, so the repository can land alone); the remaining PHP changes are self-contained.
+# The current set (26.11.0): only the two version-bearing files changed. The readme goes first and
+# the bootstrap last, so cache keys move after everything else has been digest-verified.
 UPLOAD_ORDER=(
-	"languages/lichtbild-gallery-de_DE.mo"
-	"includes/class-lichtbild-repository.php"
-	"includes/class-lichtbild-exif.php"
-	"includes/class-lichtbild-migration.php"
-	"includes/class-lichtbild-migration-screen.php"
-	"includes/class-lichtbild-editor.php"
-	"includes/class-lichtbild-album-editor.php"
-	"includes/class-lichtbild-block.php"
-	"uninstall.php"
-	"assets/css/lichtbild.css"
-	"assets/js/lichtbild.js"
 	"readme.txt"
 	"lichtbild-gallery.php"
 )

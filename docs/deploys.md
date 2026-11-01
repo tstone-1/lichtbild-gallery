@@ -19,6 +19,8 @@ that file, which is the same argument that moved the records themselves: knowing
 directions — a hook naming a record that is gone fails, and so does a record with no hook. An
 index that is not checked is a list of claims.
 
+- *The 26.11.0 deploy, which only raises the PHP floor* — two FTPS files, 160 of 160 URLs unchanged
+  as predicted with `ver=26.11.0` live, and SVN r3777857 matching all 41.
 - *The 26.10.0 deploy, the first through the hardened push and the PCRE hook* — thirteen FTPS files,
   160 of 160 URLs unchanged as predicted with `ver=26.10.0` live, and SVN r3757735 matching all 41.
 - *The 26.9.1 deploy, which replaces only verified files* — eleven staged FTPS files, all 160 URLs
@@ -161,6 +163,30 @@ index that is not checked is a list of claims.
   not the fallback.
 
 ## The records, newest first
+
+### The 26.11.0 deploy, which only raises the PHP floor
+
+Published 2026-11-01 from Git commit `2f320ab`, first to the site over FTPS, then to wordpress.org
+as **SVN r3777857**. The release moves `Requires PHP` from 8.1 to 8.2: PHP 8.1 reached end of life
+on 2025-12-31 and got no release for the critical flaws PHP patched on 2026-10-21. No plugin code
+changed, and the floor says nothing about the patch level of a site's own PHP.
+
+**The live audit selected two files**, `readme.txt` and the bootstrap, the only shipped files that
+differ. The bootstrap went last. `plan` reported no new requires, no versioned assets and no
+removed methods. Both landed without a retry and were digest-verified on landing and again after
+the set: **0 mismatches**. The full audit then reported **40 matching files, 0 changed, 0
+unreadable**, and only the two deliberately absent files. **160 of 160 URLs unchanged, all HTTP 200
+before and after** was the prediction, because `capture` strips `?ver=`; the live asset URLs
+carrying `ver=26.11.0` are what establish that the upload landed.
+
+The committed archive's **41 files** passed all 37 fresh-install checks on WordPress 7.1.4 under
+PHP 8.2.35 and Plugin Check reported no errors, both against the installed archive. The render
+suite passed 268 checks on PHP 8.2 through 8.5, 230 of 230 main and 14 of 14 feature mutations were
+killed on 8.5 and 8.2, the browser layout check passed, and CI run `41298552001` completed all five
+jobs at the release commit. Exporting `tags/26.11.0` at r3777857 and downloading the public ZIP both
+reproduced the same 41 files, the plugin API reported 26.11.0 and PHP 8.2, and `channels` found the
+two channels identical for every shared file, the German catalogue remaining the documented
+exception.
 
 ### The 26.10.0 deploy, the first through the hardened push and the PCRE hook
 
