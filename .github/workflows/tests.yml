@@ -27,9 +27,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Oldest first, so a floor that has moved shows up as the first red row. 8.1 is what
-        # `Requires PHP` names and 8.2 is what timo-stein.com runs; the rest are portability.
-        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        # Oldest first, so a floor that has moved shows up as the first red row. 8.2 is what
+        # `Requires PHP` names and what timo-stein.com runs; the rest are portability.
+        php: ['8.2', '8.3', '8.4', '8.5']
 
     steps:
       - uses: actions/checkout@v7
@@ -170,7 +170,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          # The production version. Running the mutations on all five would be five times the
+          # The production version. Running the mutations on all four would be four times the
           # minutes to answer a question about the tests rather than about portability.
           php-version: '8.2'
           coverage: none

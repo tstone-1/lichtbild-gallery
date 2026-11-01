@@ -259,7 +259,7 @@ the EXIF area off and four checks go red instead of vanishing.
     ID, an unguarded division that fatals rather than fails, four per-item checks that encoded
     "every item has a live attachment" without saying so — and one PHP warning that silently
     re-scored every check after it, in the direction nobody audits.
-  - *CI, which is the whole point* — five PHP versions, the generator run twice and `cmp`d, and
+  - *CI, which is the whole point* — four PHP versions, the generator run twice and `cmp`d, and
     `git diff --exit-code` after the mutation pass.
 - *PHP versions: test the one the site runs, not the one the development machine has* — the site is 8.2.30 and
   the development machine has 8.5. A version that is not installed is `[SKIP]`, never a pass, and a run with no

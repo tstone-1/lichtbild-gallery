@@ -18,6 +18,11 @@ landed before anything was deployed, so the two shipped together as 26.8.4.
 > at the time. Nothing else about those entries was altered: the dates, the counts, the measured
 > numbers and the reasoning are as they were written.
 
+## [Unreleased]
+
+### Changed
+- Requires PHP 8.2. PHP 8.1 reached end of life on 2025-12-31 and is no longer tested.
+
 ## [26.10.0] - 2026-10-21
 
 ### Fixed

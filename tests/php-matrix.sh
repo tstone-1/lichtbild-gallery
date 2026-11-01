@@ -24,7 +24,7 @@ FIXTURE="${1:-$ROOT/tests/fixture.json}"
 
 # Ordered oldest first, so a floor that has moved shows up as the first red row rather than
 # somewhere in the middle. `Requires PHP` in lichtbild-gallery.php must name the oldest one that passes.
-VERSIONS=(8.1 8.2 8.3 8.4 8.5)
+VERSIONS=(8.2 8.3 8.4 8.5)
 
 # The version the live site runs. A failure here is a production failure; a failure anywhere
 # else is a portability finding.

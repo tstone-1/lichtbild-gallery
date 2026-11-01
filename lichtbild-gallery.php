@@ -10,7 +10,7 @@
  * Text Domain: lichtbild-gallery
  * Domain Path: /languages
  * Requires at least: 6.0
- * Requires PHP: 8.1
+ * Requires PHP: 8.2
  *
  * Lichtbild replaces Envira Gallery Pro, and which storage it reads depends on where the site
  * is. Before the migration it owns nothing: galleries live in the `envira` post type under the

@@ -49,6 +49,9 @@ expect() {
 version="$(sed -n "s/.*define( 'LICHTBILD_VERSION', '\([^']*\)' ).*/\1/p" lichtbild-gallery.php | head -1)"
 base="$ROOT/build/lichtbild-gallery-$version.zip"
 
+# The archive holds the committed tree and an existing one is reused, so the control below fails
+# while a shipped file has uncommitted changes, and after a commit that changes one under the same
+# version number. CI starts clean. Locally, bump the version; the zip may be the released one.
 if [ ! -f "$base" ]; then
 	bash tools/build-zip.sh >/dev/null || { echo "[FAIL] could not build the archive to test against"; exit 1; }
 fi

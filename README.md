@@ -49,7 +49,7 @@ On the site it was built for, gallery permalinks went from **395 KB to 60 KB**.
 
 ## Requirements
 
-WordPress 6.0+, PHP 8.1+. No build step, no npm dependency at runtime, no bundler. PhotoSwipe
+WordPress 6.0+, PHP 8.2+. No build step, no npm dependency at runtime, no bundler. PhotoSwipe
 5.4.4 is vendored under `assets/vendor/photoswipe/` with its MIT licence.
 
 ## Installing
@@ -93,7 +93,7 @@ Each check is reported with the population it examined. A check that
 examined nothing is reported `[EMPTY]` and counts as failing, because a conditional check that
 stops running would otherwise vanish from the report and read as "not applicable".
 
-CI runs the suite on five PHP versions, 8.1 through 8.5. The mutations run once, on 8.2 — the
+CI runs the suite on four PHP versions, 8.2 through 8.5. The mutations run once, on 8.2 — the
 version the live site runs — because they ask whether the tests can fail, which is a question
 about the suite rather than about portability.
 

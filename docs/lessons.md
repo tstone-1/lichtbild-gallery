@@ -803,7 +803,7 @@ red, against a corpus that looked complete:
 
 #### CI, which is the whole point
 
-`.github/workflows/tests.yml` runs the suite on PHP 8.1 through 8.5 and the full mutation pass
+`.github/workflows/tests.yml` runs the suite on PHP 8.2 through 8.5 and the full mutation pass
 on 8.2, the production version. Three of its steps are there for reasons this file has argued
 before: the generator is run **twice** and the outputs compared with `cmp`, because determinism
 is load-bearing and nothing else would notice it lapsing; the mutation job runs `git diff
@@ -815,7 +815,7 @@ hides.
 ### PHP versions: test the one the site runs, not the one the development machine has
 
 ```sh
-bash tests/php-matrix.sh                                # 8.1 8.2 8.3 8.4 8.5, all 220 checks each
+bash tests/php-matrix.sh                                # 8.2 8.3 8.4 8.5, all checks each
 bash tests/php-matrix.sh tests/fixture-synthetic.json   # the same, with no database
 ```
 
@@ -825,10 +825,10 @@ nobody asked, the same family of mistake as quoting a debug-build benchmark. The
 plain PHP program with no WordPress and no database, so running it across versions costs
 wall clock and nothing else.
 
-`Requires PHP` in the header is **8.1** because 8.1 is the oldest version actually exercised.
-It said `7.4` first, which was a claim nothing backed; 7.4 and 8.0 are EOL and absent from
-Homebrew core, so testing them would mean adding a third-party tap for versions no host still
-offers. Raise the floor rather than claim an untested one — and if it ever needs lowering,
+`Requires PHP` in the header is **8.2** because 8.2 is the oldest version actually exercised.
+It said `7.4` first, which was a claim nothing backed; it was then 8.1 until 8.1 reached end of
+life on 2025-12-31 and Homebrew deprecated it. Testing a version below the floor would mean adding
+a third-party tap for a version PHP no longer patches. Raise the floor rather than claim an untested one — and if it ever needs lowering,
 test first.
 
 Two properties the script has because a matrix is as capable of lying as any other harness:
